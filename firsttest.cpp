@@ -6,6 +6,11 @@ struct Circle {
     int r;     // ban kinh
 };
 
+struct Line {
+    int x1,x2;
+    int y1,y2;
+}
+
 void DrawCircle(SDL_Renderer* renderer, Circle &c) {
     int dx = c.r - 1;
     int dy = 0;
@@ -61,9 +66,10 @@ int main(int argc, char* argv[]) {
     return -1;
     }
 
-
+    int xa, ya, xb,yb;
     SDL_Rect chitbox = { 390, 270, 20, 60 }; 
     Circle trajectory = { 400, 300, 50};
+    Line arrow = { xa, ya, xb, yb}
 
     bool running = true;
     SDL_Event event;
