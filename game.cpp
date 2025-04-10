@@ -5,43 +5,63 @@
 #include <ostream>
 #include <SDL2/SDL_image.h>
 #include <sstream>
+#include <fstream>
+#include <filesystem> // Thêm để tạo thư mục nếu cần
 
 Game::Game(SDL_Renderer* r, SDL_Texture* mt) 
-    : renderer(r), missileTexture(mt), gameOverTexture(nullptr), pauseTexture(nullptr), 
-      pauseButtonTexture(nullptr), scoreTexture(nullptr), highscoreTexture(nullptr), font(nullptr), 
-      gameOver(false), paused(false), score(0), highscore(0) {
+    : renderer(r), missileTexture(mt), mspaceshipTexture(nullptr), gameOverTexture(nullptr), 
+      pauseTexture(nullptr), pauseButtonTexture(nullptr), scoreTexture(nullptr), 
+      highscoreTexture(nullptr), font(nullptr), gameOver(false), paused(false), score(0), highscore(0) {
     startTime = SDL_GetTicks();  // Lấy thời gian bắt đầu game
 
     // Tải font
     font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 24); // Đường dẫn đến file font, kích thước 24
     if (!font) {
         std::cerr << "TTF_OpenFont failed: " << TTF_GetError() << std::endl;
-        return;
+        exit(1); // Thoát nếu không tải được font
+    }
+
+    // Tải texture cho tàu vũ trụ
+    SDL_Surface* spaceshipSurface = IMG_Load("images/mspaceship.png");
+    if (!spaceshipSurface) {
+        std::cerr << "IMG_Load failed for mspaceship.png: " << IMG_GetError() << std::endl;
+        // Không thoát ngay, để game vẫn chạy được, nhưng không vẽ tàu
+    } else {
+        mspaceshipTexture = SDL_CreateTextureFromSurface(renderer, spaceshipSurface);
+        SDL_FreeSurface(spaceshipSurface);
+        if (!mspaceshipTexture) {
+            std::cerr << "SDL_CreateTextureFromSurface failed for mspaceship.png: " << SDL_GetError() << std::endl;
+        }
     }
 
     // Tải texture cho pause
     SDL_Surface* pauseSurface = IMG_Load("images/pause.png");
     if (!pauseSurface) {
         std::cerr << "IMG_Load failed for pause.png: " << IMG_GetError() << std::endl;
-        return;
+        exit(1);
     }
     pauseTexture = SDL_CreateTextureFromSurface(renderer, pauseSurface);
     SDL_FreeSurface(pauseSurface);
     if (!pauseTexture) {
         std::cerr << "SDL_CreateTextureFromSurface failed for pause.png: " << SDL_GetError() << std::endl;
+        exit(1);
     }
 
     // Tải texture cho nút pause
     SDL_Surface* pauseButtonSurface = IMG_Load("images/pausebutton.png");
     if (!pauseButtonSurface) {
         std::cerr << "IMG_Load failed for pausebutton.png: " << IMG_GetError() << std::endl;
-        return;
+        exit(1);
     }
     pauseButtonTexture = SDL_CreateTextureFromSurface(renderer, pauseButtonSurface);
     SDL_FreeSurface(pauseButtonSurface);
     if (!pauseButtonTexture) {
         std::cerr << "SDL_CreateTextureFromSurface failed for pausebutton.png: " << SDL_GetError() << std::endl;
+        exit(1);
     }
+
+    // Đọc highscore từ file
+    loadHighscore();
 
     // Khởi tạo texture cho điểm số và điểm cao nhất
     updateScoreTexture();
@@ -49,6 +69,10 @@ Game::Game(SDL_Renderer* r, SDL_Texture* mt)
 }
 
 Game::~Game() {
+    // Lưu highscore trước khi thoát game
+    saveHighscore();
+
+    // Giải phóng tài nguyên
     if (font) {
         TTF_CloseFont(font);
     }
@@ -57,6 +81,46 @@ Game::~Game() {
     }
     if (highscoreTexture) {
         SDL_DestroyTexture(highscoreTexture);
+    }
+    if (mspaceshipTexture) {
+        SDL_DestroyTexture(mspaceshipTexture);
+    }
+    if (gameOverTexture) {
+        SDL_DestroyTexture(gameOverTexture);
+    }
+    if (pauseTexture) {
+        SDL_DestroyTexture(pauseTexture);
+    }
+    if (pauseButtonTexture) {
+        SDL_DestroyTexture(pauseButtonTexture);
+    }
+}
+
+void Game::loadHighscore() {
+    std::ifstream file(playerDataFile);
+    if (file.is_open()) {
+        file >> highscore; // Đọc highscore từ file
+        file.close();
+        std::cout << "Loaded highscore: " << highscore << std::endl;
+    } else {
+        std::cerr << "Could not open file " << playerDataFile << " for reading. Starting with highscore = 0." << std::endl;
+        highscore = 0; // Nếu không mở được file, đặt highscore về 0
+        // Tạo file mới với giá trị 0
+        saveHighscore();
+    }
+}
+
+void Game::saveHighscore() {
+    // Tạo thư mục playerdata nếu chưa tồn tại
+    std::filesystem::create_directories("playerdata");
+
+    std::ofstream file(playerDataFile);
+    if (file.is_open()) {
+        file << highscore; // Ghi highscore vào file
+        file.close();
+        std::cout << "Saved highscore: " << highscore << std::endl;
+    } else {
+        std::cerr << "Could not open file " << playerDataFile << " for writing." << std::endl;
     }
 }
 
@@ -123,6 +187,7 @@ void Game::handleInput(SDL_Event& event) {
 
         // Khởi động lại game khi nhấp chuột trong trạng thái game over
         if (gameOver) {
+            saveHighscore(); // Lưu highscore trước khi reset
             reset();
         }
     }
@@ -194,6 +259,7 @@ void Game::update(float deltaTime) {
                 updateScoreTexture(); // Cập nhật texture điểm số
                 if (score > highscore) {
                     highscore = score;
+                    saveHighscore(); // Lưu highscore mới vào file
                     updateHighscoreTexture(); // Cập nhật texture điểm cao nhất
                 }
             }
@@ -206,7 +272,10 @@ void Game::update(float deltaTime) {
                 for (auto& life : lives) {
                     if (!life.isRed) { allRed = false; break; }
                 }
-                if (allRed) gameOver = true;
+                if (allRed) {
+                    gameOver = true;
+                    saveHighscore(); // Lưu highscore khi game over
+                }
             }
         }
     }
@@ -217,9 +286,10 @@ void Game::render() {
     SDL_RenderClear(renderer);
 
     if (!gameOver && !paused) {
-        // Vẽ hitbox của nhân vật
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_RenderFillRect(renderer, &chitbox);
+        // Vẽ tàu vũ trụ thay vì hitbox màu đỏ
+        if (mspaceshipTexture) {
+            SDL_RenderCopy(renderer, mspaceshipTexture, NULL, &chitbox);
+        }
 
         // Vẽ vòng tròn quỹ đạo và cung
         SDL_SetRenderDrawColor(renderer, 0, 0, 200, 255);
@@ -228,11 +298,11 @@ void Game::render() {
 
         // Vẽ đạn địch
         for (auto& t : targets) {
-            if (t.active) {
+            if (t.active && missileTexture) {
                 double angle = atan2(t.dy, t.dx) * 180.0 / PI;
-                SDL_Rect missileRect = {(int)t.x - 5, (int)t.y - 5, 20, 40};
-                SDL_Point center = {10, 20};
-                SDL_RenderCopyEx(renderer, missileTexture, NULL, &missileRect, angle, &center, SDL_FLIP_NONE);
+                SDL_Rect missileRect = {(int)t.x - 10, (int)t.y - 15, 20, 30}; // Kích thước tên lửa: 20x30
+                SDL_Point center = {10, 15}; // Tâm xoay: nửa chiều rộng, nửa chiều cao
+                SDL_RenderCopyEx(renderer, missileTexture, NULL, &missileRect, angle, &center, SDL_FLIP_NONE); // Sửa lỗi cú pháp
             }
         }
 
@@ -288,7 +358,7 @@ void Game::render() {
 }
 
 void Game::reset() {
-    // Khởi động lại các giá trị về trạng thái ban đầu
+    // Khởi động lại các giá trị về trạng thái ban đầu, nhưng không reset highscore
     gameOver = false;
     paused = false;                    // Đặt lại trạng thái pause
     targets.clear();                   // Xóa tất cả tên lửa
@@ -298,7 +368,7 @@ void Game::reset() {
     missileCount = 1;                  // Reset số lượng tên lửa mỗi đợt
     waveCount = 0;                     // Reset số wave
     missileSpeed = 150.0f;             // Reset tốc độ tên lửa
-    score = 0;                         // Reset điểm số
+    score = 0;                         // Reset điểm số, nhưng không reset highscore
     updateScoreTexture();              // Cập nhật texture điểm số
     nextSpawnTime = 2000;              // Đặt lại mốc sinh đầu tiên sau 2 giây
     spawnedInWave = 0;                 // Reset số tên lửa đã sinh trong đợt

@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Tạo cửa sổ
-    SDL_Window* window = SDL_CreateWindow("Just a chill game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
+    SDL_Window* window = SDL_CreateWindow("Space Shield", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
     if (!window) {
         std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
         IMG_Quit();

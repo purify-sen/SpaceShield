@@ -15,12 +15,13 @@ class Game {
 public:
     SDL_Renderer* renderer;
     SDL_Texture* missileTexture;
-    SDL_Texture* gameOverTexture; // Texture cho màn hình Game Over
-    SDL_Texture* pauseTexture;    // Texture cho màn hình Pause
-    SDL_Texture* pauseButtonTexture; // Texture cho nút pause
-    SDL_Texture* scoreTexture;    // Texture để hiển thị điểm số
-    SDL_Texture* highscoreTexture; // Texture để hiển thị điểm cao nhất
-    TTF_Font* font;               // Font để vẽ văn bản
+    SDL_Texture* mspaceshipTexture;    // Texture cho tàu vũ trụ
+    SDL_Texture* gameOverTexture;      // Texture cho màn hình Game Over
+    SDL_Texture* pauseTexture;         // Texture cho màn hình Pause
+    SDL_Texture* pauseButtonTexture;   // Texture cho nút pause
+    SDL_Texture* scoreTexture;         // Texture để hiển thị điểm số
+    SDL_Texture* highscoreTexture;     // Texture để hiển thị điểm cao nhất
+    TTF_Font* font;                    // Font để vẽ văn bản
     Circle trajectory = {400, 300, 50};        // Vòng tròn quỹ đạo (nhân vật)
     SDL_Rect chitbox = {390, 270, 20, 60};     // Hitbox của nhân vật
     SDL_Rect pauseButton = {10, 10, 40, 40};   // Hitbox của nút pause (ô vuông 40x40, ở góc trên cùng bên trái)
@@ -38,15 +39,18 @@ public:
     float missileSpeed = 150.0f;               // Tốc độ ban đầu của tên lửa
     int score = 0;                             // Điểm số hiện tại
     int highscore = 0;                         // Điểm cao nhất
+    const char* playerDataFile = "playerdata/playerdata"; // Đường dẫn tương đối
 
     Game(SDL_Renderer* r, SDL_Texture* mt);
-    ~Game();                                   // Destructor để giải phóng font
+    ~Game();                                   // Destructor để giải phóng font và texture
     void handleInput(SDL_Event& event);        // Xử lý input
     void update(float deltaTime);
     void render();
     void reset();
     void updateScoreTexture();                 // Cập nhật texture cho điểm số
     void updateHighscoreTexture();             // Cập nhật texture cho điểm cao nhất
+    void loadHighscore();                      // Đọc highscore từ file
+    void saveHighscore();                      // Lưu highscore vào file
 
 private:
     bool CheckCollisionWithArc(Target& t);     // Kiểm tra va chạm với cung
