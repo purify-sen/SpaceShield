@@ -4,7 +4,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <vector>
-#include "target.h"
+#include "enemy.h"  // Thay target.h thành enemy.h
 #include "life.h"
 
 #define PI M_PI
@@ -15,48 +15,56 @@ class Game {
 public:
     SDL_Renderer* renderer;
     SDL_Texture* missileTexture;
-    SDL_Texture* mspaceshipTexture;    // Texture cho tàu vũ trụ
-    SDL_Texture* gameOverTexture;      // Texture cho màn hình Game Over
-    SDL_Texture* pauseTexture;         // Texture cho màn hình Pause
-    SDL_Texture* pauseButtonTexture;   // Texture cho nút pause
-    SDL_Texture* scoreTexture;         // Texture để hiển thị điểm số
-    SDL_Texture* highscoreTexture;     // Texture để hiển thị điểm cao nhất
-    TTF_Font* font;                    // Font để vẽ văn bản
-    Circle trajectory = {400, 300, 50};        // Vòng tròn quỹ đạo (nhân vật)
-    SDL_Rect chitbox = {390, 270, 20, 60};     // Hitbox của nhân vật
-    SDL_Rect pauseButton = {10, 10, 40, 40};   // Hitbox của nút pause (ô vuông 40x40, ở góc trên cùng bên trái)
-    std::vector<Target> targets;               // Danh sách đạn địch
-    std::vector<Life> lives = {{700, 550, false}, {730, 550, false}, {760, 550, false}}; // Mạng sống
-    double arcStartAngle = -PI / 10.3;         // Góc bắt đầu của cung (radian)
+    SDL_Texture* mspaceshipTexture;
+    SDL_Texture* gameOverTexture;
+    SDL_Texture* pauseTexture;
+    SDL_Texture* pauseButtonTexture;
+    SDL_Texture* scoreTexture;
+    SDL_Texture* highscoreTexture;
+    TTF_Font* font;
+    Circle trajectory = {400, 300, 50};
+    SDL_Rect chitbox = {390, 270, 20, 60};
+    SDL_Rect pauseButton = {10, 10, 40, 40};
+    std::vector<Target> targets;
+    std::vector<Laser> lasers;  // Vẫn dùng Laser, nhưng được định nghĩa trong enemy.h
+    std::vector<Life> lives = {{700, 550, false}, {730, 550, false}, {760, 550, false}};
+    double arcStartAngle = -PI / 10.3;
     bool gameOver = false;
-    bool paused = false;                       // Trạng thái pause
-    Uint32 startTime;                          // Thời gian bắt đầu game
-    int missileCount = 1;                      // Số lượng tên lửa mỗi đợt
-    int waveCount = 0;                         // Đếm số wave đã hoàn thành
-    Uint32 nextSpawnTime = 2000;               // Mốc thời gian sinh tên lửa đầu tiên (2 giây)
-    Uint32 lastMissileSpawnTime = 0;           // Thời gian sinh tên lửa cuối cùng trong dãy
-    int spawnedInWave = 0;                     // Số tên lửa đã sinh trong đợt hiện tại
-    float missileSpeed = 150.0f;               // Tốc độ ban đầu của tên lửa
-    int score = 0;                             // Điểm số hiện tại
-    int highscore = 0;                         // Điểm cao nhất
-    const char* playerDataFile = "playerdata/playerdata"; // Đường dẫn tương đối
+    bool paused = false;
+    Uint32 startTime;
+    int missileCount = 1;
+    int laserCount = 0;
+    int waveCount = 0;
+    Uint32 nextSpawnTime = 2000;
+    Uint32 lastMissileSpawnTime = 0;
+    Uint32 lastLaserSpawnTime = 0;
+    int spawnedMissilesInWave = 0;
+    int spawnedLasersInWave = 0;
+    float defaultMissileSpeed = 150.0f;
+    float maxMissileSpeed = 150.0f;
+    int score = 0;
+    int highscore = 0;
+    const char* playerDataFile = "playerdata/playerdata";
 
     Game(SDL_Renderer* r, SDL_Texture* mt);
-    ~Game();                                   // Destructor để giải phóng font và texture
-    void handleInput(SDL_Event& event);        // Xử lý input
+    ~Game();
+    void handleInput(SDL_Event& event);
     void update(float deltaTime);
     void render();
     void reset();
-    void updateScoreTexture();                 // Cập nhật texture cho điểm số
-    void updateHighscoreTexture();             // Cập nhật texture cho điểm cao nhất
-    void loadHighscore();                      // Đọc highscore từ file
-    void saveHighscore();                      // Lưu highscore vào file
+    void updateScoreTexture();
+    void updateHighscoreTexture();
+    void loadHighscore();
+    void saveHighscore();
 
 private:
-    bool CheckCollisionWithArc(Target& t);     // Kiểm tra va chạm với cung
-    bool CheckCollisionWithChitbox(Target& t); // Kiểm tra va chạm với hitbox
-    void DrawCircle(SDL_Renderer* renderer, Circle& c); // Vẽ vòng tròn
-    void DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double arcAngle); // Vẽ cung
+    bool CheckCollisionWithArc(Target& t);
+    bool CheckCollisionWithChitbox(Target& t);
+    bool CheckCollisionWithLaser(Laser& l);
+    bool CheckCollisionArcWithLaser(Laser& l); // Đã có từ yêu cầu trước
+    void DrawCircle(SDL_Renderer* renderer, Circle& c);
+    void DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double arcAngle);
+    void DrawLaser(SDL_Renderer* renderer, Laser& l);
 };
 
 #endif
