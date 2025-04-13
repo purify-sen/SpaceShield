@@ -15,6 +15,8 @@ class Game {
 public:
     SDL_Renderer* renderer;
     SDL_Texture* missileTexture;
+    SDL_Texture* fastMissileTexture;
+    SDL_Texture* warningTexture;
     SDL_Texture* mspaceshipTexture;
     SDL_Texture* gameOverTexture;
     SDL_Texture* pauseTexture;
@@ -30,11 +32,17 @@ public:
     SDL_Rect volumeSlider = {300, 400, 200, 10};
     SDL_Rect volumeKnob = {364, 395, 20, 20};
     std::vector<Target> targets;
+    std::vector<Target> fastMissiles;
     std::vector<Life> lives = {{700, 550, false}, {730, 550, false}, {760, 550, false}};
     double arcStartAngle = -PI / 10.3;
     bool gameOver = false;
     bool paused = false;
     bool isDraggingKnob = false;
+    bool showWarning = false;
+    Uint32 warningStartTime = 0;
+    // Lưu vị trí cảnh báo
+    float warningX = 0;
+    float warningY = 0;
     Uint32 startTime;
     int missileCount = 1;
     int waveCount = 0;
@@ -50,9 +58,6 @@ public:
     const char* playerDataFile = "playerdata/playerdata";
     Uint32 pauseStartTime = 0;
     Uint32 totalPausedTime = 0;
-    const float fastMissileSpeedMultiplier = 7.0f;
-    const Uint32 warningDuration = 2000;
-    const float fastMissileProbability = 0.2f;
 
     Game(SDL_Renderer* r, SDL_Texture* mt);
     ~Game();
@@ -68,11 +73,10 @@ public:
     void saveHighscore();
 
 private:
-    bool CheckCollisionWithArc(Target& t, float prevX, float prevY); // Cập nhật khai báo
+    bool CheckCollisionWithArc(Target& t);
     bool CheckCollisionWithChitbox(Target& t);
     void DrawCircle(SDL_Renderer* renderer, Circle& c);
     void DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double arcAngle);
-    void DrawWarning(SDL_Renderer* renderer, Target& t);
 };
 
 #endif
