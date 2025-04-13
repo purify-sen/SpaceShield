@@ -263,12 +263,15 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
 
         if (paused && mouseX >= giveUpButton.x && mouseX <= giveUpButton.x + giveUpButton.w &&
             mouseY >= giveUpButton.y && mouseY <= giveUpButton.y + giveUpButton.h) {
+            paused = false; // Đặt lại trạng thái paused để tắt màn hình Pause
+            totalPausedTime += SDL_GetTicks() - pauseStartTime; // Cập nhật thời gian tạm dừng
+            pauseStartTime = 0; // Đặt lại thời gian bắt đầu tạm dừng
             gameOver = true;
             menu.gameState = MainMenu::GAME_OVER;
             menu.saveHighscores(score);
             updateScoreTexture();
             updateHighscoreTexture();
-        }
+}
 
         if (gameOver) {
             if (mouseX >= backToMenuButton.x && mouseX <= backToMenuButton.x + backToMenuButton.w &&
@@ -519,14 +522,14 @@ void Game::render() {
         if (scoreTexture) {
             int w, h;
             SDL_QueryTexture(scoreTexture, NULL, NULL, &w, &h);
-            SDL_Rect scoreRect = {400 - w / 2, 260, w, h}; // Di chuyển lên y=260
+            SDL_Rect scoreRect = {400 - w / 2, 260, w, h};
             SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreRect);
         }
 
         if (highscoreTexture) {
             int w, h;
             SDL_QueryTexture(highscoreTexture, NULL, NULL, &w, &h);
-            SDL_Rect highscoreRect = {400 - w / 2, 300, w, h}; // Di chuyển lên y=300
+            SDL_Rect highscoreRect = {400 - w / 2, 300, w, h};
             SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
         }
 
@@ -543,8 +546,7 @@ void Game::render() {
         SDL_Rect backToMenuTextRect = {backToMenuButton.x + (backToMenuButton.w - w) / 2, backToMenuButton.y + (backToMenuButton.h - h) / 2, w, h};
         SDL_RenderCopy(renderer, backToMenuTexture, NULL, &backToMenuTextRect);
     }
-
-    if (paused) {
+    else if (paused) { // Thêm else để tránh vẽ Pause khi gameOver = true
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
         SDL_Rect overlay = {0, 0, 800, 600};
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
