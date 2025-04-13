@@ -5,7 +5,7 @@
 #include <SDL2/SDL_ttf.h>
 #include <vector>
 
-class Game; // Forward declaration để tránh vòng lặp include
+class Game;
 
 class MainMenu {
 public:
@@ -21,6 +21,7 @@ public:
     SDL_Texture* settingsTitleTexture;
     SDL_Texture* backButtonTexture;
     SDL_Texture* volumeTexture;
+    SDL_Texture* sensitivityTexture;
     SDL_Rect playButton = {300, 250, 200, 50};
     SDL_Rect highscoreButton = {300, 320, 200, 50};
     SDL_Rect settingsButton = {300, 390, 200, 50};
@@ -28,9 +29,13 @@ public:
     SDL_Rect backButton = {300, 500, 200, 50};
     SDL_Rect volumeSlider = {300, 420, 200, 10};
     SDL_Rect volumeKnob = {300 + (100 * 200 / 100) - 5, 415, 10, 20};
+    SDL_Rect sensitivitySlider = {300, 470, 200, 10};
+    SDL_Rect sensitivityKnob = {300 + (50 * 200 / 100) - 5, 465, 10, 20};
     std::vector<int> highscores;
     int volume = 100;
+    int sensitivity = 50;
     bool isDraggingKnob = false;
+    bool isDraggingSensitivityKnob = false;
     const char* playerDataFile = "playerdata/playerdata";
     enum GameState { MENU, PLAYING, PAUSED, GAME_OVER, HIGHSCORE, SETTINGS };
     GameState gameState = MENU;
@@ -43,6 +48,7 @@ public:
     void saveHighscores(int score);
     void updateHighscoreListTexture();
     void updateVolumeTexture();
+    void updateSensitivityTexture();
 };
 
 #endif

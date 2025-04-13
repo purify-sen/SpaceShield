@@ -24,11 +24,12 @@ private:
     SDL_Texture* restartTexture;
     SDL_Texture* gameOverTextTexture;
     SDL_Texture* volumeLabelTexture;
+    SDL_Texture* giveUpTexture; // Texture cho nút Give Up
     bool gameOver;
     bool paused;
     bool showWarning;
     bool isFirstFastMissile;
-    bool justStarted; // Theo dõi trạng thái vừa bắt đầu chơi
+    bool justStarted;
     Uint32 startTime;
     Uint32 pauseStartTime;
     Uint32 totalPausedTime;
@@ -45,9 +46,11 @@ private:
     float arcStartAngle;
     float defaultMissileSpeed;
     float maxMissileSpeed;
-    int volume; // Giá trị âm lượng (0-100, đồng bộ với settings)
-    SDL_Rect volumeSlider; // Thanh trượt âm lượng, giống settings
-    SDL_Rect volumeKnob; // Nút trượt, giống settings
+    int volume;
+    int sensitivity; // Độ nhạy cho phím A/D
+    SDL_Rect volumeSlider;
+    SDL_Rect volumeKnob;
+    SDL_Rect giveUpButton; // Nút Give Up trong Pause
     bool isDraggingVolume;
 
     struct Circle {
@@ -92,6 +95,12 @@ public:
             volume = vol;
             volumeKnob.x = volumeSlider.x + (volume * volumeSlider.w / 100) - volumeKnob.w / 2;
             Mix_VolumeMusic(volume * 128 / 100);
+        }
+    }
+    int getSensitivity() const { return sensitivity; }
+    void setSensitivity(int sens) {
+        if (sens >= 0 && sens <= 100) {
+            sensitivity = sens;
         }
     }
     void startGame() {

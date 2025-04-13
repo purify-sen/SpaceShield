@@ -12,8 +12,8 @@ MainMenu::MainMenu(SDL_Renderer* r, TTF_Font* f)
     : renderer(r), font(f), titleTexture(nullptr), playButtonTexture(nullptr), 
       highscoreButtonTexture(nullptr), settingsButtonTexture(nullptr), exitButtonTexture(nullptr), 
       highscoreTitleTexture(nullptr), highscoreListTexture(nullptr), settingsTitleTexture(nullptr), 
-      backButtonTexture(nullptr), volumeTexture(nullptr), 
-      volume(100), isDraggingKnob(false), gameState(MENU) {
+      backButtonTexture(nullptr), volumeTexture(nullptr), sensitivityTexture(nullptr), 
+      volume(100), sensitivity(50), isDraggingKnob(false), isDraggingSensitivityKnob(false), gameState(MENU) {
     SDL_Color textColor = {255, 255, 255, 255};
 
     SDL_Surface* titleSurface = TTF_RenderText_Solid(font, "Space Shield", textColor);
@@ -48,10 +48,19 @@ MainMenu::MainMenu(SDL_Renderer* r, TTF_Font* f)
     backButtonTexture = SDL_CreateTextureFromSurface(renderer, backSurface);
     SDL_FreeSurface(backSurface);
 
+    SDL_Surface* volumeSurface = TTF_RenderText_Solid(font, "Volume: 100", textColor);
+    volumeTexture = SDL_CreateTextureFromSurface(renderer, volumeSurface);
+    SDL_FreeSurface(volumeSurface);
+
+    SDL_Surface* sensitivitySurface = TTF_RenderText_Solid(font, "Sensitivity: 50", textColor);
+    sensitivityTexture = SDL_CreateTextureFromSurface(renderer, sensitivitySurface);
+    SDL_FreeSurface(sensitivitySurface);
+
     Mix_Volume(-1, volume * 128 / 100);
     loadHighscores();
     updateHighscoreListTexture();
     updateVolumeTexture();
+    updateSensitivityTexture();
 }
 
 MainMenu::~MainMenu() {
@@ -65,6 +74,7 @@ MainMenu::~MainMenu() {
     if (settingsTitleTexture) SDL_DestroyTexture(settingsTitleTexture);
     if (backButtonTexture) SDL_DestroyTexture(backButtonTexture);
     if (volumeTexture) SDL_DestroyTexture(volumeTexture);
+    if (sensitivityTexture) SDL_DestroyTexture(sensitivityTexture);
 }
 
 void MainMenu::loadHighscores() {
@@ -136,6 +146,23 @@ void MainMenu::updateVolumeTexture() {
     SDL_FreeSurface(textSurface);
 }
 
+void MainMenu::updateSensitivityTexture() {
+    std::stringstream ss;
+    ss << "Sensitivity: " << sensitivity;
+    std::string sensitivityStr = ss.str();
+
+    SDL_Color textColor = {255, 255, 255, 255};
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, sensitivityStr.c_str(), textColor);
+    if (!textSurface) {
+        std::cerr << "TTF_RenderText_Solid failed: " << TTF_GetError() << std::endl;
+        return;
+    }
+
+    if (sensitivityTexture) SDL_DestroyTexture(sensitivityTexture);
+    sensitivityTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+}
+
 void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
     if (event.type == SDL_MOUSEBUTTONDOWN) {
         int mouseX, mouseY;
@@ -146,7 +173,7 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
                 mouseY >= playButton.y && mouseY <= playButton.y + playButton.h) {
                 gameState = PLAYING;
                 game.startGame();
-                game.reset(); // Đặt lại trạng thái trò chơi
+                game.reset();
             }
             else if (mouseX >= highscoreButton.x && mouseX <= highscoreButton.x + highscoreButton.w &&
                      mouseY >= highscoreButton.y && mouseY <= highscoreButton.y + highscoreButton.h) {
@@ -166,6 +193,7 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
                 mouseY >= backButton.y && mouseY <= backButton.y + backButton.h) {
                 gameState = MENU;
                 isDraggingKnob = false;
+                isDraggingSensitivityKnob = false;
             }
         }
 
@@ -174,10 +202,15 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
                 mouseY >= volumeKnob.y && mouseY <= volumeKnob.y + volumeKnob.h) {
                 isDraggingKnob = true;
             }
+            if (mouseX >= sensitivityKnob.x && mouseX <= sensitivityKnob.x + sensitivityKnob.w &&
+                mouseY >= sensitivityKnob.y && mouseY <= sensitivityKnob.y + sensitivityKnob.h) {
+                isDraggingSensitivityKnob = true;
+            }
         }
     }
     else if (event.type == SDL_MOUSEBUTTONUP) {
         isDraggingKnob = false;
+        isDraggingSensitivityKnob = false;
     }
     else if (event.type == SDL_MOUSEMOTION && isDraggingKnob) {
         int mouseX, mouseY;
@@ -194,6 +227,23 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
         volume = ((newX - volumeSlider.x) * 100) / volumeSlider.w;
         Mix_Volume(-1, volume * 128 / 100);
         updateVolumeTexture();
+        game.setVolume(volume);
+    }
+    else if (event.type == SDL_MOUSEMOTION && isDraggingSensitivityKnob) {
+        int mouseX, mouseY;
+        SDL_GetMouseState(&mouseX, &mouseY);
+
+        int newX = mouseX - sensitivityKnob.w / 2;
+        if (newX < sensitivitySlider.x) newX = sensitivitySlider.x;
+        if (newX > sensitivitySlider.x + sensitivitySlider.w - sensitivityKnob.w) {
+            newX = sensitivitySlider.x + sensitivitySlider.w - sensitivityKnob.w;
+        }
+
+        sensitivityKnob.x = newX;
+
+        sensitivity = ((newX - sensitivitySlider.x) * 100) / sensitivitySlider.w;
+        updateSensitivityTexture();
+        game.setSensitivity(sensitivity);
     }
 }
 
@@ -279,9 +329,23 @@ void MainMenu::render() {
         if (volumeTexture) {
             int w, h;
             SDL_QueryTexture(volumeTexture, NULL, NULL, &w, &h);
-            SDL_Rect volumeRect = {400 - w / 2, 390, w, h};
+            SDL_Rect volumeRect = {400 - w / 2, 360, w, h}; // Di chuyển lên y=360
             SDL_RenderCopy(renderer, volumeTexture, NULL, &volumeRect);
         }
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderFillRect(renderer, &sensitivitySlider);
+
+        SDL_SetRenderDrawColor(renderer, isDraggingSensitivityKnob ? 255 : 200, isDraggingSensitivityKnob ? 255 : 200, isDraggingSensitivityKnob ? 0 : 255, 255);
+        SDL_RenderFillRect(renderer, &sensitivityKnob);
+
+        if (sensitivityTexture) {
+            int w, h;
+            SDL_QueryTexture(sensitivityTexture, NULL, NULL, &w, &h);
+            SDL_Rect sensitivityRect = {400 - w / 2, 440, w, h};
+            SDL_RenderCopy(renderer, sensitivityTexture, NULL, &sensitivityRect);
+        }
+
         if (backButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             SDL_RenderFillRect(renderer, &backButton);

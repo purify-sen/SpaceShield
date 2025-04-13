@@ -14,11 +14,12 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
       highscoreTexture(nullptr), pausedTexture(nullptr), 
       backToMenuTexture(nullptr), restartTexture(nullptr), 
       gameOverTextTexture(nullptr), volumeLabelTexture(nullptr),
+      giveUpTexture(nullptr), // Khởi tạo texture Give Up
       gameOver(false), paused(false), showWarning(false), 
       isFirstFastMissile(true), justStarted(false),
       warningStartTime(0), warningX(0), warningY(0), 
       score(0), pauseStartTime(0), totalPausedTime(0), 
-      volume(100), isDraggingVolume(false),
+      volume(100), sensitivity(50), isDraggingVolume(false),
       missileCount(1), waveCount(0),
       nextSpawnTime(2000), lastMissileSpawnTime(0),
       arcStartAngle(-PI / 10.3),
@@ -27,6 +28,7 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
       pauseButton{750, 10, 40, 40},
       backToMenuButton{300, 400, 200, 50},
       restartButton{300, 340, 200, 50},
+      giveUpButton{300, 460, 200, 50}, // Nút Give Up trong Pause
       trajectory{400, 300, 60} {
     wavesUntilIncrease = 7 + (rand() % 6);
 
@@ -36,10 +38,11 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
         lives.push_back(life);
     }
 
-    // Khởi tạo thanh trượt âm lượng, đồng bộ với settings
+    // Khởi tạo thanh trượt âm lượng
     volumeSlider = {300, 420, 200, 10};
     volumeKnob = {300 + (volume * 200 / 100) - 5, 415, 10, 20};
     Mix_VolumeMusic(volume * 128 / 100);
+    sensitivity = menu->sensitivity; // Đồng bộ sensitivity
 
     // Tải texture cho tàu vũ trụ
     SDL_Surface* spaceshipSurface = IMG_Load("images/mspaceship.png");
@@ -85,6 +88,7 @@ Game::~Game() {
     if (restartTexture) SDL_DestroyTexture(restartTexture);
     if (gameOverTextTexture) SDL_DestroyTexture(gameOverTextTexture);
     if (volumeLabelTexture) SDL_DestroyTexture(volumeLabelTexture);
+    if (giveUpTexture) SDL_DestroyTexture(giveUpTexture);
 }
 
 void Game::initTextures() {
@@ -117,6 +121,19 @@ void Game::initTextures() {
         std::cerr << "SDL_CreateTextureFromSurface failed for Restart: " << SDL_GetError() << std::endl;
     }
     SDL_FreeSurface(textSurface);
+
+    textSurface = TTF_RenderText_Solid(font, "Give Up", textColor);
+    if (!textSurface) {
+        std::cerr << "TTF_RenderText_Solid failed for Give Up: " << TTF_GetError() << std::endl;
+        TTF_CloseFont(font);
+        return;
+    }
+    giveUpTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    if (!giveUpTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for Give Up: " << SDL_GetError() << std::endl;
+    }
+    SDL_FreeSurface(textSurface);
+
     TTF_CloseFont(font);
 }
 
@@ -244,6 +261,15 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
             isDraggingVolume = true;
         }
 
+        if (paused && mouseX >= giveUpButton.x && mouseX <= giveUpButton.x + giveUpButton.w &&
+            mouseY >= giveUpButton.y && mouseY <= giveUpButton.y + giveUpButton.h) {
+            gameOver = true;
+            menu.gameState = MainMenu::GAME_OVER;
+            menu.saveHighscores(score);
+            updateScoreTexture();
+            updateHighscoreTexture();
+        }
+
         if (gameOver) {
             if (mouseX >= backToMenuButton.x && mouseX <= backToMenuButton.x + backToMenuButton.w &&
                 mouseY >= backToMenuButton.y && mouseY <= backToMenuButton.y + backToMenuButton.h) {
@@ -254,7 +280,7 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
                 mouseY >= restartButton.y && mouseY <= restartButton.y + restartButton.h) {
                 reset();
                 menu.gameState = MainMenu::PLAYING;
-                startGame(); // Đặt lại thời gian khi restart
+                startGame();
             }
         }
     }
@@ -298,17 +324,9 @@ void Game::update(float deltaTime) {
 
     if (!paused) {
         const Uint8* keys = SDL_GetKeyboardState(NULL);
-        if (keys[SDL_SCANCODE_A]) arcStartAngle -= 2 * PI * deltaTime;
-        if (keys[SDL_SCANCODE_D]) arcStartAngle += 2 * PI * deltaTime;
-
-        // Kiểm tra và tăng maxMissileSpeed sau mỗi 5 wave
-        static int lastWaveIncreased = 0;
-        if (waveCount > lastWaveIncreased && waveCount % 5 == 0) {
-            maxMissileSpeed *= 1.3f;
-            maxMissileSpeed = std::min(maxMissileSpeed, defaultMissileSpeed * 2.5f);
-            lastWaveIncreased = waveCount;
-            std::cout << "Maximum missile speed updated to: " << maxMissileSpeed << " pixels/s" << std::endl;
-        }
+        float sensitivityFactor = 0.75f + (sensitivity / 100.0f) * 0.5f; // 0.75 đến 1.25
+        if (keys[SDL_SCANCODE_A]) arcStartAngle -= 2 * PI * deltaTime * sensitivityFactor;
+        if (keys[SDL_SCANCODE_D]) arcStartAngle += 2 * PI * deltaTime * sensitivityFactor;
 
         // Tạo tên lửa nhanh
         if (waveCount >= 9 && (waveCount - 9) % 3 == 0 && fastMissiles.empty() && !showWarning) {
@@ -501,14 +519,14 @@ void Game::render() {
         if (scoreTexture) {
             int w, h;
             SDL_QueryTexture(scoreTexture, NULL, NULL, &w, &h);
-            SDL_Rect scoreRect = {400 - w / 2, 300, w, h};
+            SDL_Rect scoreRect = {400 - w / 2, 260, w, h}; // Di chuyển lên y=260
             SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreRect);
         }
 
         if (highscoreTexture) {
             int w, h;
             SDL_QueryTexture(highscoreTexture, NULL, NULL, &w, &h);
-            SDL_Rect highscoreRect = {400 - w / 2, 340, w, h};
+            SDL_Rect highscoreRect = {400 - w / 2, 300, w, h}; // Di chuyển lên y=300
             SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
         }
 
@@ -565,6 +583,13 @@ void Game::render() {
         SDL_RenderFillRect(renderer, &volumeSlider);
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderFillRect(renderer, &volumeKnob);
+
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+        SDL_RenderFillRect(renderer, &giveUpButton);
+        int w, h;
+        SDL_QueryTexture(giveUpTexture, NULL, NULL, &w, &h);
+        SDL_Rect giveUpTextRect = {giveUpButton.x + (giveUpButton.w - w) / 2, giveUpButton.y + (giveUpButton.h - h) / 2, w, h};
+        SDL_RenderCopy(renderer, giveUpTexture, NULL, &giveUpTextRect);
     }
 
     SDL_RenderPresent(renderer);
