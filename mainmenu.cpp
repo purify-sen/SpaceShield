@@ -329,7 +329,7 @@ void MainMenu::render() {
         if (volumeTexture) {
             int w, h;
             SDL_QueryTexture(volumeTexture, NULL, NULL, &w, &h);
-            SDL_Rect volumeRect = {400 - w / 2, 360, w, h}; // Di chuyển lên y=360
+            SDL_Rect volumeRect = {150, 360, w, h}; // Dịch sang trái, x=150
             SDL_RenderCopy(renderer, volumeTexture, NULL, &volumeRect);
         }
 
@@ -342,7 +342,7 @@ void MainMenu::render() {
         if (sensitivityTexture) {
             int w, h;
             SDL_QueryTexture(sensitivityTexture, NULL, NULL, &w, &h);
-            SDL_Rect sensitivityRect = {400 - w / 2, 440, w, h};
+            SDL_Rect sensitivityRect = {150, 440, w, h}; // Dịch sang trái, x=150
             SDL_RenderCopy(renderer, sensitivityTexture, NULL, &sensitivityRect);
         }
 
