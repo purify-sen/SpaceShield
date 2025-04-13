@@ -4,7 +4,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <vector>
-#include "enemy.h"  // Thay target.h thành enemy.h
+#include "enemy.h"
 #include "life.h"
 
 #define PI M_PI
@@ -21,30 +21,38 @@ public:
     SDL_Texture* pauseButtonTexture;
     SDL_Texture* scoreTexture;
     SDL_Texture* highscoreTexture;
+    SDL_Texture* pausedTexture;
+    SDL_Texture* volumeTexture;
     TTF_Font* font;
     Circle trajectory = {400, 300, 50};
     SDL_Rect chitbox = {390, 270, 20, 60};
     SDL_Rect pauseButton = {10, 10, 40, 40};
+    SDL_Rect volumeSlider = {300, 400, 200, 10};
+    SDL_Rect volumeKnob = {364, 395, 20, 20};
     std::vector<Target> targets;
-    std::vector<Laser> lasers;  // Vẫn dùng Laser, nhưng được định nghĩa trong enemy.h
     std::vector<Life> lives = {{700, 550, false}, {730, 550, false}, {760, 550, false}};
     double arcStartAngle = -PI / 10.3;
     bool gameOver = false;
     bool paused = false;
+    bool isDraggingKnob = false;
     Uint32 startTime;
     int missileCount = 1;
-    int laserCount = 0;
     int waveCount = 0;
     Uint32 nextSpawnTime = 2000;
     Uint32 lastMissileSpawnTime = 0;
-    Uint32 lastLaserSpawnTime = 0;
     int spawnedMissilesInWave = 0;
-    int spawnedLasersInWave = 0;
+    int wavesUntilIncrease;
     float defaultMissileSpeed = 150.0f;
     float maxMissileSpeed = 150.0f;
     int score = 0;
     int highscore = 0;
+    int volume = 64;
     const char* playerDataFile = "playerdata/playerdata";
+    Uint32 pauseStartTime = 0;
+    Uint32 totalPausedTime = 0;
+    const float fastMissileSpeedMultiplier = 7.0f;
+    const Uint32 warningDuration = 2000;
+    const float fastMissileProbability = 0.2f;
 
     Game(SDL_Renderer* r, SDL_Texture* mt);
     ~Game();
@@ -54,17 +62,17 @@ public:
     void reset();
     void updateScoreTexture();
     void updateHighscoreTexture();
+    void updatePausedTexture();
+    void updateVolumeTexture();
     void loadHighscore();
     void saveHighscore();
 
 private:
-    bool CheckCollisionWithArc(Target& t);
+    bool CheckCollisionWithArc(Target& t, float prevX, float prevY); // Cập nhật khai báo
     bool CheckCollisionWithChitbox(Target& t);
-    bool CheckCollisionWithLaser(Laser& l);
-    bool CheckCollisionArcWithLaser(Laser& l); // Đã có từ yêu cầu trước
     void DrawCircle(SDL_Renderer* renderer, Circle& c);
     void DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double arcAngle);
-    void DrawLaser(SDL_Renderer* renderer, Laser& l);
+    void DrawWarning(SDL_Renderer* renderer, Target& t);
 };
 
 #endif

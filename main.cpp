@@ -1,12 +1,14 @@
+// main.cpp
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h> // Thêm SDL_mixer
 #include <iostream>
 #include "game.h"
 
 int main(int argc, char* argv[]) {
     // Khởi tạo SDL
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) { // Thêm SDL_INIT_AUDIO
         std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
         return -1;
     }
@@ -26,10 +28,20 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
+    // Khởi tạo SDL_mixer
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+        std::cerr << "Mix_OpenAudio failed: " << Mix_GetError() << std::endl;
+        IMG_Quit();
+        TTF_Quit();
+        SDL_Quit();
+        return -1;
+    }
+
     // Tạo cửa sổ
     SDL_Window* window = SDL_CreateWindow("Space Shield", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
     if (!window) {
         std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+        Mix_Quit();
         IMG_Quit();
         TTF_Quit();
         SDL_Quit();
@@ -41,6 +53,7 @@ int main(int argc, char* argv[]) {
     if (!renderer) {
         std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << std::endl;
         SDL_DestroyWindow(window);
+        Mix_Quit();
         IMG_Quit();
         TTF_Quit();
         SDL_Quit();
@@ -53,6 +66,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "IMG_Load failed for missile.png: " << IMG_GetError() << std::endl;
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
+        Mix_Quit();
         IMG_Quit();
         TTF_Quit();
         SDL_Quit();
@@ -64,6 +78,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "SDL_CreateTextureFromSurface failed: " << SDL_GetError() << std::endl;
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
+        Mix_Quit();
         IMG_Quit();
         TTF_Quit();
         SDL_Quit();
@@ -81,7 +96,7 @@ int main(int argc, char* argv[]) {
             if (event.type == SDL_QUIT) {
                 running = false;
             }
-            game.handleInput(event); // Xử lý input
+            game.handleInput(event);
         }
 
         float deltaTime = (SDL_GetTicks() - lastTime) / 1000.0f;
@@ -90,16 +105,17 @@ int main(int argc, char* argv[]) {
         game.update(deltaTime);
         game.render();
 
-        SDL_Delay(16); // Giới hạn 60 FPS
+        SDL_Delay(16);
     }
 
     // Giải phóng tài nguyên
     if (game.gameOverTexture) SDL_DestroyTexture(game.gameOverTexture);
     if (game.pauseTexture) SDL_DestroyTexture(game.pauseTexture);
-    if (game.pauseButtonTexture) SDL_DestroyTexture(game.pauseButtonTexture); // Giải phóng pauseButtonTexture
+    if (game.pauseButtonTexture) SDL_DestroyTexture(game.pauseButtonTexture);
     SDL_DestroyTexture(missileTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    Mix_Quit();
     IMG_Quit();
     TTF_Quit();
     SDL_Quit();

@@ -2,28 +2,28 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
-#include <ostream>
-#include <SDL2/SDL_image.h>
 #include <sstream>
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h>
 
 Game::Game(SDL_Renderer* r, SDL_Texture* mt) 
     : renderer(r), missileTexture(mt), mspaceshipTexture(nullptr), gameOverTexture(nullptr), 
       pauseTexture(nullptr), pauseButtonTexture(nullptr), scoreTexture(nullptr), 
-      highscoreTexture(nullptr), font(nullptr), gameOver(false), paused(false), score(0), highscore(0),
-      defaultMissileSpeed(150.0f), maxMissileSpeed(150.0f), laserCount(0) {
-    startTime = SDL_GetTicks();  // Lấy thời gian bắt đầu game
+      highscoreTexture(nullptr), pausedTexture(nullptr), volumeTexture(nullptr), 
+      font(nullptr), gameOver(false), paused(false), isDraggingKnob(false), score(0), highscore(0),
+      volume(64), defaultMissileSpeed(150.0f), maxMissileSpeed(150.0f), pauseStartTime(0), totalPausedTime(0) {
+    startTime = SDL_GetTicks();
+    wavesUntilIncrease = 7 + (rand() % 6);
 
-    // Tải font
-    font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 24);
+    font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
     if (!font) {
         std::cerr << "TTF_OpenFont failed: " << TTF_GetError() << std::endl;
         exit(1);
     }
 
-    // Tải texture cho tàu vũ trụ
     SDL_Surface* spaceshipSurface = IMG_Load("images/mspaceship.png");
     if (!spaceshipSurface) {
         std::cerr << "IMG_Load failed for mspaceship.png: " << IMG_GetError() << std::endl;
@@ -35,20 +35,6 @@ Game::Game(SDL_Renderer* r, SDL_Texture* mt)
         }
     }
 
-    // Tải texture cho pause
-    SDL_Surface* pauseSurface = IMG_Load("images/pause.png");
-    if (!pauseSurface) {
-        std::cerr << "IMG_Load failed for pause.png: " << IMG_GetError() << std::endl;
-        exit(1);
-    }
-    pauseTexture = SDL_CreateTextureFromSurface(renderer, pauseSurface);
-    SDL_FreeSurface(pauseSurface);
-    if (!pauseTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for pause.png: " << SDL_GetError() << std::endl;
-        exit(1);
-    }
-
-    // Tải texture cho nút pause
     SDL_Surface* pauseButtonSurface = IMG_Load("images/pausebutton.png");
     if (!pauseButtonSurface) {
         std::cerr << "IMG_Load failed for pausebutton.png: " << IMG_GetError() << std::endl;
@@ -61,19 +47,18 @@ Game::Game(SDL_Renderer* r, SDL_Texture* mt)
         exit(1);
     }
 
-    // Đọc highscore từ file
-    loadHighscore();
+    Mix_Volume(-1, volume);
 
-    // Khởi tạo texture cho điểm số và điểm cao nhất
+    loadHighscore();
     updateScoreTexture();
     updateHighscoreTexture();
+    updatePausedTexture();
+    updateVolumeTexture();
 }
 
 Game::~Game() {
-    // Lưu highscore trước khi thoát game
     saveHighscore();
 
-    // Giải phóng tài nguyên
     if (font) {
         TTF_CloseFont(font);
     }
@@ -82,6 +67,12 @@ Game::~Game() {
     }
     if (highscoreTexture) {
         SDL_DestroyTexture(highscoreTexture);
+    }
+    if (pausedTexture) {
+        SDL_DestroyTexture(pausedTexture);
+    }
+    if (volumeTexture) {
+        SDL_DestroyTexture(volumeTexture);
     }
     if (mspaceshipTexture) {
         SDL_DestroyTexture(mspaceshipTexture);
@@ -167,6 +158,47 @@ void Game::updateHighscoreTexture() {
     }
 }
 
+void Game::updatePausedTexture() {
+    std::string pausedStr = "Paused";
+    SDL_Color textColor = {255, 255, 255, 255};
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, pausedStr.c_str(), textColor);
+    if (!textSurface) {
+        std::cerr << "TTF_RenderText_Solid failed: " << TTF_GetError() << std::endl;
+        return;
+    }
+
+    if (pausedTexture) {
+        SDL_DestroyTexture(pausedTexture);
+    }
+    pausedTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    if (!pausedTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for paused: " << SDL_GetError() << std::endl;
+    }
+}
+
+void Game::updateVolumeTexture() {
+    std::stringstream ss;
+    ss << "Volume: " << volume;
+    std::string volumeStr = ss.str();
+
+    SDL_Color textColor = {255, 255, 255, 255};
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, volumeStr.c_str(), textColor);
+    if (!textSurface) {
+        std::cerr << "TTF_RenderText_Solid failed: " << TTF_GetError() << std::endl;
+        return;
+    }
+
+    if (volumeTexture) {
+        SDL_DestroyTexture(volumeTexture);
+    }
+    volumeTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    if (!volumeTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for volume: " << SDL_GetError() << std::endl;
+    }
+}
+
 void Game::handleInput(SDL_Event& event) {
     if (event.type == SDL_MOUSEBUTTONDOWN) {
         int mouseX, mouseY;
@@ -174,7 +206,22 @@ void Game::handleInput(SDL_Event& event) {
 
         if (mouseX >= pauseButton.x && mouseX <= pauseButton.x + pauseButton.w &&
             mouseY >= pauseButton.y && mouseY <= pauseButton.y + pauseButton.h) {
-            paused = !paused;
+            if (!paused) {
+                pauseStartTime = SDL_GetTicks();
+                paused = true;
+            } else {
+                totalPausedTime += SDL_GetTicks() - pauseStartTime;
+                paused = false;
+                pauseStartTime = 0;
+            }
+            isDraggingKnob = false;
+        }
+
+        if (paused) {
+            if (mouseX >= volumeKnob.x && mouseX <= volumeKnob.x + volumeKnob.w &&
+                mouseY >= volumeKnob.y && mouseY <= volumeKnob.y + volumeKnob.h) {
+                isDraggingKnob = true;
+            }
         }
 
         if (gameOver) {
@@ -182,188 +229,160 @@ void Game::handleInput(SDL_Event& event) {
             reset();
         }
     }
+    else if (event.type == SDL_MOUSEBUTTONUP) {
+        isDraggingKnob = false;
+    }
+    else if (event.type == SDL_MOUSEMOTION && isDraggingKnob) {
+        int mouseX, mouseY;
+        SDL_GetMouseState(&mouseX, &mouseY);
+
+        int newX = mouseX - volumeKnob.w / 2;
+        if (newX < volumeSlider.x) newX = volumeSlider.x;
+        if (newX > volumeSlider.x + volumeSlider.w - volumeKnob.w) {
+            newX = volumeSlider.x + volumeSlider.w - volumeKnob.w;
+        }
+
+        volumeKnob.x = newX;
+
+        float position = (float)(volumeKnob.x - volumeSlider.x) / (volumeSlider.w - volumeKnob.w);
+        volume = (int)(position * 128);
+        Mix_Volume(-1, volume);
+        updateVolumeTexture();
+    }
 }
 
 void Game::update(float deltaTime) {
-    if (gameOver || paused) {
+    if (gameOver) {
         return;
     }
 
-    // Điều khiển cung
-    const Uint8* keys = SDL_GetKeyboardState(NULL);
-    if (keys[SDL_SCANCODE_A]) arcStartAngle -= 2 * PI * deltaTime;
-    if (keys[SDL_SCANCODE_D]) arcStartAngle += 2 * PI * deltaTime;
+    // Tính thời gian hiệu quả, trừ đi thời gian đã pause
+    Uint32 currentTime = SDL_GetTicks() - startTime - totalPausedTime;
 
-    // Sinh tên lửa và laser
-    Uint32 currentTime = SDL_GetTicks() - startTime;
-    if (currentTime >= nextSpawnTime) {
-        // Sinh tên lửa
-        if (spawnedMissilesInWave < missileCount) {
-            if (currentTime - lastMissileSpawnTime >= 300 || spawnedMissilesInWave == 0) {
-                Target t;
-                int side = rand() % 4;
-                switch (side) {
-                    case 0: t.x = 0; t.y = rand() % 600; break;
-                    case 1: t.x = 800; t.y = rand() % 600; break;
-                    case 2: t.x = rand() % 800; t.y = 0; break;
-                    case 3: t.x = rand() % 800; t.y = 600; break;
-                }
-                float distX = 400 - t.x, distY = 300 - t.y;
-                float distance = sqrt(distX * distX + distY * distY);
-                if (distance < 1e-6) distance = 1.0f; // Tránh chia cho 0
-                float missileSpeed = defaultMissileSpeed + 
-                    (maxMissileSpeed - defaultMissileSpeed) * (rand() / (float)RAND_MAX);
-                t.dx = (distX / distance) * missileSpeed;
-                t.dy = (distY / distance) * missileSpeed;
-                t.active = true;
-                targets.push_back(t);
+    // Logic chỉ chạy khi không pause
+    if (!paused) {
+        // Input điều khiển vòng cung
+        const Uint8* keys = SDL_GetKeyboardState(NULL);
+        if (keys[SDL_SCANCODE_A]) arcStartAngle -= 2 * PI * deltaTime;
+        if (keys[SDL_SCANCODE_D]) arcStartAngle += 2 * PI * deltaTime;
 
-                spawnedMissilesInWave++;
-                lastMissileSpawnTime = currentTime;
-            }
-        }
+        // Sinh tên lửa và cập nhật wave
+        if (currentTime >= nextSpawnTime) {
+            if (spawnedMissilesInWave < missileCount) {
+                if (currentTime - lastMissileSpawnTime >= 300 || spawnedMissilesInWave == 0) {
+                    Target t;
+                    int side = rand() % 4;
+                    switch (side) {
+                        case 0: t.x = 0; t.y = rand() % 600; break;
+                        case 1: t.x = 800; t.y = rand() % 600; break;
+                        case 2: t.x = rand() % 800; t.y = 0; break;
+                        case 3: t.x = rand() % 800; t.y = 600; break;
+                    }
+                    float distX = 400 - t.x, distY = 300 - t.y; // Sửa lỗi: thay "dist риcк: (400 - t.x)" thành "distX = 400 - t.x"
+                    float distance = sqrt(distX * distX + distY * distY);
+                    if (distance < 1e-6) distance = 1.0f;
 
-        // Sinh laser (từ wave 8)
-        if (waveCount >= 8 && spawnedLasersInWave < laserCount) {
-            if (currentTime - lastLaserSpawnTime >= 300 || spawnedLasersInWave == 0) {
-                Laser l;
-                l.spawnTime = currentTime;
-                l.active = false;
-                int dir = rand() % 4;
-                switch (dir) {
-                    case 0: l.direction = LEFT; l.angle = PI; break;
-                    case 1: l.direction = RIGHT; l.angle = 0; break;
-                    case 2: l.direction = UP; l.angle = 3 * PI / 2; break;
-                    case 3: l.direction = DOWN; l.angle = PI / 2; break;
-                }
-                lasers.push_back(l);
+                    // Quyết định xem đây có phải là Fast Missile không
+                    bool spawnFastMissile = false;
+                    if (waveCount >= 9) {
+                        float randomChance = (float)rand() / RAND_MAX;
+                        if (randomChance < fastMissileProbability) {
+                            spawnFastMissile = true;
+                        }
+                    }
 
-                spawnedLasersInWave++;
-                lastLaserSpawnTime = currentTime;
-            }
-        }
-    }
+                    if (spawnFastMissile) {
+                        t.isFast = true;
+                        t.warningActive = true;
+                        t.warningStartTime = currentTime;
+                        t.active = false;
+                    } else {
+                        float missileSpeed = defaultMissileSpeed + 
+                            (maxMissileSpeed - defaultMissileSpeed) * (rand() / (float)RAND_MAX);
+                        t.dx = (distX / distance) * missileSpeed;
+                        t.dy = (distY / distance) * missileSpeed;
+                        t.active = true;
+                    }
 
-    // Chuyển sang wave mới
-    if (spawnedMissilesInWave >= missileCount && 
-        (waveCount < 8 || spawnedLasersInWave >= laserCount) && 
-        currentTime >= nextSpawnTime) {
-        waveCount++;
-
-        // Tăng số lượng tên lửa sau mỗi 7-12 wave
-        int wavesUntilIncrease = 7 + (rand() % 6); // Ngẫu nhiên từ 7 đến 12
-        if (waveCount % wavesUntilIncrease == 0) {
-            missileCount++;
-        }
-
-        // Tăng tốc độ tên lửa sau mỗi 4 wave
-        if (waveCount > 0 && waveCount % 4 == 0) {
-            maxMissileSpeed *= 1.15f;
-            std::cout << "Max missile speed increased to: " << maxMissileSpeed << std::endl;
-        }
-
-        // Tăng số lượng laser sau mỗi 5 wave (từ wave 8)
-        if (waveCount >= 8 && (waveCount - 8) % 5 == 0) {
-            laserCount++;
-            std::cout << "Laser count increased to: " << laserCount << std::endl;
-        }
-
-        nextSpawnTime += 3000 + (rand() % 2001);
-        spawnedMissilesInWave = 0;
-        spawnedLasersInWave = 0;
-    }
-
-    // Cập nhật tên lửa
-    for (auto& t : targets) {
-        if (t.active) {
-            t.x += t.dx * deltaTime;
-            t.y += t.dy * deltaTime;
-            if (CheckCollisionWithArc(t)) {
-                t.active = false;
-                score++;
-                updateScoreTexture();
-                if (score > highscore) {
-                    highscore = score;
-                    saveHighscore();
-                    updateHighscoreTexture();
-                }
-            }
-            else if (CheckCollisionWithChitbox(t)) {
-                t.active = false;
-                for (auto& life : lives) {
-                    if (!life.isRed) { life.isRed = true; break; }
-                }
-                bool allRed = true;
-                for (auto& life : lives) {
-                    if (!life.isRed) { allRed = false; break; }
-                }
-                if (allRed) {
-                    gameOver = true;
-                    saveHighscore();
+                    targets.push_back(t);
+                    spawnedMissilesInWave++;
+                    lastMissileSpawnTime = currentTime;
                 }
             }
         }
-    }
 
-    // Cập nhật laser
-    for (auto& l : lasers) {
-        if (!l.active && currentTime - l.spawnTime >= 2500) { // 2.5 giây cảnh báo
-            // Kiểm tra xem cung có chặn laser hay không trước khi kích hoạt
-            if (!CheckCollisionArcWithLaser(l)) {
-                l.active = true; // Chỉ kích hoạt nếu cung không chặn
-            } else {
-                l.active = false; // Cung chặn laser, giữ trạng thái không active
+        if (spawnedMissilesInWave >= missileCount && currentTime >= nextSpawnTime) {
+            waveCount++;
+            if (waveCount % wavesUntilIncrease == 0) {
+                missileCount++;
+                std::cout << "Missile count increased to: " << missileCount << std::endl;
+            }
+            if (waveCount > 0 && waveCount % 4 == 0) {
+                maxMissileSpeed *= 1.15f;
+                std::cout << "Max missile speed increased to: " << maxMissileSpeed << std::endl;
+            }
+            nextSpawnTime += 3000 + (rand() % 2001);
+            spawnedMissilesInWave = 0;
+        }
+
+        // Kiểm tra và active Fast Missile sau khi hết thời gian cảnh báo
+        for (auto& t : targets) {
+            if (t.isFast && t.warningActive) {
+                if (currentTime - t.warningStartTime >= warningDuration) {
+                    t.warningActive = false;
+                    t.active = true;
+                    float distX = 400 - t.x, distY = 300 - t.y;
+                    float distance = sqrt(distX * distX + distY * distY);
+                    if (distance < 1e-6) distance = 1.0f;
+                    float missileSpeed = defaultMissileSpeed * fastMissileSpeedMultiplier;
+                    t.dx = (distX / distance) * missileSpeed;
+                    t.dy = (distY / distance) * missileSpeed;
+                }
             }
         }
-    }
 
-    // Kiểm tra va chạm với laser
-    for (auto& l : lasers) {
-        if (l.active) {
-            if (CheckCollisionWithLaser(l)) {
-                l.active = false; // Vô hiệu hóa ngay sau khi gây sát thương
-                for (auto& life : lives) {
-                    if (!life.isRed) {
-                        life.isRed = true;
-                        break;
+        // Di chuyển tên lửa và kiểm tra va chạm
+        for (auto& t : targets) {
+            if (t.active) {
+                float prevX = t.x;
+                float prevY = t.y;
+                t.x += t.dx * deltaTime;
+                t.y += t.dy * deltaTime;
+                if (CheckCollisionWithArc(t, prevX, prevY)) {
+                    t.active = false;
+                    score++;
+                    updateScoreTexture();
+                    if (score > highscore) {
+                        highscore = score;
+                        saveHighscore();
+                        updateHighscoreTexture();
                     }
                 }
-                bool allRed = true;
-                for (auto& life : lives) {
-                    if (!life.isRed) { allRed = false; break; }
-                }
-                if (allRed) {
-                    gameOver = true;
-                    saveHighscore();
-                }
-            } else if (CheckCollisionArcWithLaser(l)) {
-                l.active = false; // Vô hiệu hóa nếu cung chặn laser khi đã active
-                score += 2;
-                updateScoreTexture();
-                if (score > highscore) {
-                    highscore = score;
-                    saveHighscore();
-                    updateHighscoreTexture();
+                else if (CheckCollisionWithChitbox(t)) {
+                    t.active = false;
+                    for (auto& life : lives) {
+                        if (!life.isRed) {
+                            life.isRed = true;
+                            break;
+                        }
+                    }
+                    bool allRed = true;
+                    for (auto& life : lives) {
+                        if (!life.isRed) { allRed = false; break; }
+                    }
+                    if (allRed) {
+                        gameOver = true;
+                        saveHighscore();
+                    }
                 }
             }
         }
+
+        targets.erase(
+            std::remove_if(targets.begin(), targets.end(), [](Target& t) { return !t.active && !t.warningActive; }),
+            targets.end()
+        );
     }
-
-    // Xóa tên lửa không active
-    targets.erase(
-        std::remove_if(targets.begin(), targets.end(), [](Target& t) { return !t.active; }),
-        targets.end()
-    );
-
-    // Xóa laser sau 3.5 giây hoặc khi bị chặn trước khi active
-    lasers.erase(
-        std::remove_if(lasers.begin(), lasers.end(), 
-            [currentTime](Laser& l) { 
-                return (!l.active && currentTime - l.spawnTime >= 2500) || 
-                       (currentTime - l.spawnTime >= 3500); 
-            }),
-        lasers.end()
-    );
 }
 
 void Game::render() {
@@ -371,32 +390,31 @@ void Game::render() {
     SDL_RenderClear(renderer);
 
     if (!gameOver && !paused) {
-        // Vẽ tàu vũ trụ
         if (mspaceshipTexture) {
             SDL_RenderCopy(renderer, mspaceshipTexture, NULL, &chitbox);
         }
 
-        // Vẽ vòng tròn quỹ đạo và cung
         SDL_SetRenderDrawColor(renderer, 0, 0, 200, 255);
         DrawCircle(renderer, trajectory);
         DrawArc(renderer, trajectory, arcStartAngle, 2 * PI / 3);
 
-        // Vẽ tên lửa
         for (auto& t : targets) {
             if (t.active && missileTexture) {
                 double angle = atan2(t.dy, t.dx) * 180.0 / PI;
                 SDL_Rect missileRect = {(int)t.x - 10, (int)t.y - 15, 20, 30};
                 SDL_Point center = {10, 15};
+                if (t.isFast) {
+                    SDL_SetTextureColorMod(missileTexture, 255, 0, 0);
+                } else {
+                    SDL_SetTextureColorMod(missileTexture, 255, 255, 255);
+                }
                 SDL_RenderCopyEx(renderer, missileTexture, NULL, &missileRect, angle, &center, SDL_FLIP_NONE);
+            }
+            if (t.warningActive) {
+                DrawWarning(renderer, t);
             }
         }
 
-        // Vẽ laser
-        for (auto& l : lasers) {
-            DrawLaser(renderer, l);
-        }
-
-        // Vẽ mạng sống
         for (auto& life : lives) {
             Circle lifeCircle = {life.x, life.y, 10};
             SDL_SetRenderDrawColor(renderer, life.isRed ? 255 : 0, 0, life.isRed ? 0 : 255, 255);
@@ -404,12 +422,10 @@ void Game::render() {
         }
     }
 
-    // Vẽ nút pause
     if (pauseButtonTexture) {
         SDL_RenderCopy(renderer, pauseButtonTexture, NULL, &pauseButton);
     }
 
-    // Vẽ điểm số và điểm cao nhất
     if (scoreTexture) {
         int w, h;
         SDL_QueryTexture(scoreTexture, NULL, NULL, &w, &h);
@@ -423,7 +439,6 @@ void Game::render() {
         SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
     }
 
-    // Vẽ "GAME OVER"
     if (gameOver && !gameOverTexture) {
         SDL_Surface* textSurface = IMG_Load("images/gameover.png");
         if (!textSurface) {
@@ -438,10 +453,32 @@ void Game::render() {
         SDL_RenderCopy(renderer, gameOverTexture, NULL, &textRect);
     }
 
-    // Vẽ "PAUSE"
     if (paused) {
-        SDL_Rect pauseRect = {800 / 2 - 150, 600 / 2 - 150, 300, 300};
-        SDL_RenderCopy(renderer, pauseTexture, NULL, &pauseRect);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
+        SDL_Rect overlay = {0, 0, 800, 600};
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_RenderFillRect(renderer, &overlay);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+
+        if (pausedTexture) {
+            int w, h;
+            SDL_QueryTexture(pausedTexture, NULL, NULL, &w, &h);
+            SDL_Rect pausedRect = {800 / 2 - w / 2, 300 - h / 2, w, h};
+            SDL_RenderCopy(renderer, pausedTexture, NULL, &pausedRect);
+        }
+
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+        SDL_RenderFillRect(renderer, &volumeSlider);
+
+        SDL_SetRenderDrawColor(renderer, isDraggingKnob ? 255 : 200, isDraggingKnob ? 255 : 200, isDraggingKnob ? 0 : 255, 255);
+        SDL_RenderFillRect(renderer, &volumeKnob);
+
+        if (volumeTexture) {
+            int w, h;
+            SDL_QueryTexture(volumeTexture, NULL, NULL, &w, &h);
+            SDL_Rect volumeRect = {800 / 2 - w / 2, volumeSlider.y - h - 20, w, h};
+            SDL_RenderCopy(renderer, volumeTexture, NULL, &volumeRect);
+        }
     }
 
     SDL_RenderPresent(renderer);
@@ -450,36 +487,50 @@ void Game::render() {
 void Game::reset() {
     gameOver = false;
     paused = false;
+    isDraggingKnob = false;
     targets.clear();
-    lasers.clear();
     for (auto& life : lives) {
         life.isRed = false;
     }
     missileCount = 1;
-    laserCount = 0;
     waveCount = 0;
     maxMissileSpeed = defaultMissileSpeed;
     score = 0;
     updateScoreTexture();
     nextSpawnTime = 2000;
     spawnedMissilesInWave = 0;
-    spawnedLasersInWave = 0;
     lastMissileSpawnTime = 0;
-    lastLaserSpawnTime = 0;
     startTime = SDL_GetTicks();
     arcStartAngle = -PI / 10.3;
+    wavesUntilIncrease = 7 + (rand() % 6);
+    volume = 64;
+    volumeKnob.x = 364;
+    updateVolumeTexture();
+    pauseStartTime = 0;
+    totalPausedTime = 0;
     if (gameOverTexture) {
         SDL_DestroyTexture(gameOverTexture);
         gameOverTexture = nullptr;
     }
 }
 
-bool Game::CheckCollisionWithArc(Target& t) {
-    for (double angle = arcStartAngle; angle <= arcStartAngle + 2 * PI / 3; angle += 0.01) {
-        int arcX = trajectory.x + trajectory.r * cos(angle);
-        int arcY = trajectory.y + trajectory.r * sin(angle);
-        int dist = (t.x - arcX) * (t.x - arcX) + (t.y - arcY) * (t.y - arcY);
-        if (dist < 25) return true;
+bool Game::CheckCollisionWithArc(Target& t, float prevX, float prevY) {
+    // Kiểm tra va chạm theo quỹ đạo từ (prevX, prevY) đến (t.x, t.y)
+    const int steps = 10; // Số bước kiểm tra trên quỹ đạo
+    float stepX = (t.x - prevX) / steps;
+    float stepY = (t.y - prevY) / steps;
+
+    for (int i = 0; i <= steps; i++) {
+        float checkX = prevX + stepX * i;
+        float checkY = prevY + stepY * i;
+
+        // Kiểm tra từng điểm trên quỹ đạo với vòng cung
+        for (double angle = arcStartAngle; angle <= arcStartAngle + 2 * PI / 3; angle += 0.005) {
+            int arcX = trajectory.x + trajectory.r * cos(angle);
+            int arcY = trajectory.y + trajectory.r * sin(angle);
+            int dist = (checkX - arcX) * (checkX - arcX) + (checkY - arcY) * (checkY - arcY);
+            if (dist < 25) return true;
+        }
     }
     return false;
 }
@@ -487,44 +538,6 @@ bool Game::CheckCollisionWithArc(Target& t) {
 bool Game::CheckCollisionWithChitbox(Target& t) {
     return (t.x >= chitbox.x && t.x <= chitbox.x + chitbox.w &&
             t.y >= chitbox.y && t.y <= chitbox.y + chitbox.h);
-}
-
-bool Game::CheckCollisionWithLaser(Laser& l) {
-    float laserX1 = 400 + 1000 * cos(l.angle);
-    float laserY1 = 300 + 1000 * sin(l.angle);
-    float laserX2 = 400 - 1000 * cos(l.angle);
-    float laserY2 = 300 - 1000 * sin(l.angle);
-
-    for (int x = chitbox.x; x <= chitbox.x + chitbox.w; x++) {
-        for (int y = chitbox.y; y <= chitbox.y + chitbox.h; y++) {
-            float num = abs((laserY2 - laserY1) * x - (laserX2 - laserX1) * y + laserX2 * laserY1 - laserY2 * laserX1);
-            float den = sqrt((laserY2 - laserY1) * (laserY2 - laserY1) + (laserX2 - laserX1) * (laserX2 - laserX1));
-            float distance = num / den;
-            if (distance < 3.0f) { // Tăng ngưỡng để dễ phát hiện va chạm
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool Game::CheckCollisionArcWithLaser(Laser& l) {
-    float laserX1 = 400 + 1000 * cos(l.angle);
-    float laserY1 = 300 + 1000 * sin(l.angle);
-    float laserX2 = 400 - 1000 * cos(l.angle);
-    float laserY2 = 300 - 1000 * sin(l.angle);
-
-    for (double angle = arcStartAngle; angle <= arcStartAngle + 2 * PI / 3; angle += 0.05) {
-        int arcX = trajectory.x + trajectory.r * cos(angle);
-        int arcY = trajectory.y + trajectory.r * sin(angle);
-        float num = abs((laserY2 - laserY1) * arcX - (laserX2 - laserX1) * arcY + laserX2 * laserY1 - laserY2 * laserX1);
-        float den = sqrt((laserY2 - laserY1) * (laserY2 - laserY1) + (laserX2 - laserX1) * (laserX2 - laserX1));
-        float distance = num / den;
-        if (distance < 3.0f) {
-            return true;
-        }
-    }
-    return false;
 }
 
 void Game::DrawCircle(SDL_Renderer* renderer, Circle& c) {
@@ -550,96 +563,10 @@ void Game::DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double 
     SDL_RenderDrawLines(renderer, points, segments + 1);
 }
 
-void Game::DrawLaser(SDL_Renderer* renderer, Laser& l) {
-    float x1 = 400 + 1000 * cos(l.angle);
-    float y1 = 300 + 1000 * sin(l.angle);
-    float x2 = 400 - 1000 * cos(l.angle);
-    float y2 = 300 - 1000 * sin(l.angle);
-
-    Uint32 currentTime = SDL_GetTicks() - startTime;
-    if (!l.active && currentTime - l.spawnTime < 2500) {
-        // Vẽ nét đứt màu vàng trong 2.5 giây cảnh báo
-        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-        float length = sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-        float dx = (x2 - x1) / length * 10;
-        float dy = (y2 - y1) / length * 10;
-        for (float t = 0; t < length; t += 20) {
-            float startX = x1 + (t / length) * (x2 - x1);
-            float startY = y1 + (t / length) * (y2 - y1);
-            float endX = startX + dx;
-            float endY = startY + dy;
-            if (endX > x1 && endX > x2 || endX < x1 && endX < x2) break;
-            SDL_RenderDrawLine(renderer, (int)startX, (int)startY, (int)endX, (int)endY);
-        }
-
-        // Vẽ mũi tên
-        float arrowBaseX, arrowBaseY;
-        switch (l.direction) {
-            case LEFT: 
-                arrowBaseX = 400 + 50; // Bên phải tâm
-                arrowBaseY = 300;
-                break;
-            case RIGHT: 
-                arrowBaseX = 400 - 50; // Bên trái tâm
-                arrowBaseY = 300;
-                break;
-            case UP: 
-                arrowBaseX = 400;
-                arrowBaseY = 300 + 50; // Phía trên tâm
-                break;
-            case DOWN: 
-                arrowBaseX = 400;
-                arrowBaseY = 300 - 50; // Phía dưới tâm
-                break;
-        }
-        float arrowSize = 10;
-        float arrowAngle1 = l.angle + PI / 6;
-        float arrowAngle2 = l.angle - PI / 6;
-        float arrowTipX1 = arrowBaseX + arrowSize * cos(arrowAngle1);
-        float arrowTipY1 = arrowBaseY + arrowSize * sin(arrowAngle1);
-        float arrowTipX2 = arrowBaseX + arrowSize * cos(arrowAngle2);
-        float arrowTipY2 = arrowBaseY + arrowSize * sin(arrowAngle2);
-
-        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-        SDL_RenderDrawLine(renderer, (int)arrowBaseX, (int)arrowBaseY, (int)arrowTipX1, (int)arrowTipY1);
-        SDL_RenderDrawLine(renderer, (int)arrowBaseX, (int)arrowBaseY, (int)arrowTipX2, (int)arrowTipY2);
-    } else if (l.active && currentTime - l.spawnTime < 3000) { // Hoạt hình tia đỏ trong 0.5s
-        // Vẽ tia đỏ trong 500ms sau khi kích hoạt (2500ms đến 3000ms)
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        
-        // Kiểm tra xem cung có chặn laser hay không
-        bool arcBlocksLaser = false;
-        float arcHitX = x2, arcHitY = y2; // Điểm cuối mặc định của tia
-        for (double angle = arcStartAngle; angle <= arcStartAngle + 2 * PI / 3; angle += 0.05) {
-            int arcX = trajectory.x + trajectory.r * cos(angle);
-            int arcY = trajectory.y + trajectory.r * sin(angle);
-            float num = abs((y2 - y1) * arcX - (x2 - x1) * arcY + x2 * y1 - y2 * x1);
-            float den = sqrt((y2 - y1) * (y2 - y1) + (x2 - x1) * (x2 - x1));
-            float distance = num / den;
-            if (distance < 3.0f) {
-                arcBlocksLaser = true;
-                // Tính giao điểm gần nhất giữa laser và cung
-                float t = ((arcX - x1) * (x2 - x1) + (arcY - y1) * (y2 - y1)) / 
-                          ((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-                if (t >= 0 && t <= 1) {
-                    arcHitX = x1 + t * (x2 - x1);
-                    arcHitY = y1 + t * (y2 - y1);
-                }
-                break;
-            }
-        }
-
-        // Vẽ tia đỏ
-        if (arcBlocksLaser) {
-            // Tia dừng tại cung
-            SDL_RenderDrawLine(renderer, (int)x1, (int)y1, (int)arcHitX, (int)arcHitY);
-        } else {
-            // Tia xuyên qua màn hình
-            SDL_RenderDrawLine(renderer, (int)x1, (int)y1, (int)x2, (int)y2);
-        }
-    } else if (currentTime - l.spawnTime < 3500) {
-        // Vẽ màu xám nếu laser bị vô hiệu hóa sau 0.5s
-        SDL_SetRenderDrawColor(renderer, 128, 128, 128, 255);
-        SDL_RenderDrawLine(renderer, (int)x1, (int)y1, (int)x2, (int)y2);
-    }
+void Game::DrawWarning(SDL_Renderer* renderer, Target& t) {
+    Circle warningCircle = {(int)t.x, (int)t.y, 15};
+    Uint32 currentTime = SDL_GetTicks() - startTime - totalPausedTime;
+    int alpha = 128 + 127 * sin(10.0 * (currentTime - t.warningStartTime) / 1000.0);
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, alpha);
+    DrawCircle(renderer, warningCircle);
 }
