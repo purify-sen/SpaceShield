@@ -1,123 +1,93 @@
-// main.cpp
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_mixer.h> // Thêm SDL_mixer
+#include <SDL2/SDL_mixer.h>
 #include <iostream>
+#include <algorithm>
+#include <ctime>
 #include "game.h"
+#include "mainmenu.h"
+#include "enemy.h"
 
 int main(int argc, char* argv[]) {
-    // Khởi tạo SDL
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) { // Thêm SDL_INIT_AUDIO
-        std::cerr << "SDL_Init failed: " << SDL_GetError() << std::endl;
-        return -1;
-    }
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    TTF_Init();
+    IMG_Init(IMG_INIT_PNG);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
 
-    // Khởi tạo SDL_ttf
-    if (TTF_Init() < 0) {
-        std::cerr << "TTF_Init failed: " << TTF_GetError() << std::endl;
-        SDL_Quit();
-        return -1;
-    }
+    srand(static_cast<unsigned int>(time(NULL)));
 
-    // Khởi tạo SDL_image
-    if (IMG_Init(IMG_INIT_PNG) != IMG_INIT_PNG) {
-        std::cerr << "IMG_Init failed: " << IMG_GetError() << std::endl;
-        TTF_Quit();
-        SDL_Quit();
-        return -1;
-    }
-
-    // Khởi tạo SDL_mixer
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
-        std::cerr << "Mix_OpenAudio failed: " << Mix_GetError() << std::endl;
-        IMG_Quit();
-        TTF_Quit();
-        SDL_Quit();
-        return -1;
-    }
-
-    // Tạo cửa sổ
-    SDL_Window* window = SDL_CreateWindow("Space Shield", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
-    if (!window) {
-        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
-        Mix_Quit();
-        IMG_Quit();
-        TTF_Quit();
-        SDL_Quit();
-        return -1;
-    }
-
-    // Tạo renderer
+    SDL_Window* window = SDL_CreateWindow("Space Shield", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, 0);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer) {
-        std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << std::endl;
-        SDL_DestroyWindow(window);
-        Mix_Quit();
-        IMG_Quit();
-        TTF_Quit();
-        SDL_Quit();
-        return -1;
-    }
 
-    // Tải texture cho missile
     SDL_Surface* missileSurface = IMG_Load("images/missile.png");
     if (!missileSurface) {
         std::cerr << "IMG_Load failed for missile.png: " << IMG_GetError() << std::endl;
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        Mix_Quit();
-        IMG_Quit();
-        TTF_Quit();
-        SDL_Quit();
-        return -1;
+        return 1;
     }
     SDL_Texture* missileTexture = SDL_CreateTextureFromSurface(renderer, missileSurface);
     SDL_FreeSurface(missileSurface);
     if (!missileTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed: " << SDL_GetError() << std::endl;
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        Mix_Quit();
-        IMG_Quit();
-        TTF_Quit();
-        SDL_Quit();
-        return -1;
+        std::cerr << "SDL_CreateTextureFromSurface failed for missile.png: " << SDL_GetError() << std::endl;
+        return 1;
     }
 
-    // Tạo đối tượng Game
-    Game game(renderer, missileTexture);
+    TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
+    if (!font) {
+        std::cerr << "TTF_OpenFont failed: " << TTF_GetError() << std::endl;
+        return 1;
+    }
+
+    MainMenu menu(renderer, font);
+    Enemy enemy(renderer, missileTexture);
+    Game game(renderer, &enemy, &menu);
+
     bool running = true;
+    SDL_Event event;
     Uint32 lastTime = SDL_GetTicks();
 
     while (running) {
-        SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
             }
-            game.handleInput(event);
+
+            if (menu.gameState == MainMenu::MENU || menu.gameState == MainMenu::HIGHSCORE || menu.gameState == MainMenu::SETTINGS) {
+                menu.handleInput(event, running);
+            }
+            else if (menu.gameState == MainMenu::PLAYING || menu.gameState == MainMenu::PAUSED || menu.gameState == MainMenu::GAME_OVER) {
+                game.handleInput(event, menu);
+            }
         }
 
-        float deltaTime = (SDL_GetTicks() - lastTime) / 1000.0f;
-        lastTime = SDL_GetTicks();
+        Uint32 currentTime = SDL_GetTicks();
+        float deltaTime = (currentTime - lastTime) / 1000.0f;
+        lastTime = currentTime;
 
-        game.update(deltaTime);
-        game.render();
+        if (menu.gameState == MainMenu::PLAYING) {
+            game.update(deltaTime);
+            if (game.isGameOver()) { // Use getter method
+                menu.gameState = MainMenu::GAME_OVER;
+                menu.updateHighscoreListTexture();
+            }
+        }
 
-        SDL_Delay(16);
+        if (menu.gameState == MainMenu::MENU || menu.gameState == MainMenu::HIGHSCORE || menu.gameState == MainMenu::SETTINGS) {
+            menu.render();
+        }
+        else if (menu.gameState == MainMenu::PLAYING || menu.gameState == MainMenu::PAUSED || menu.gameState == MainMenu::GAME_OVER) {
+            game.render();
+        }
     }
 
-    // Giải phóng tài nguyên
-    if (game.gameOverTexture) SDL_DestroyTexture(game.gameOverTexture);
-    if (game.pauseTexture) SDL_DestroyTexture(game.pauseTexture);
-    if (game.pauseButtonTexture) SDL_DestroyTexture(game.pauseButtonTexture);
+    TTF_CloseFont(font);
     SDL_DestroyTexture(missileTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
-    Mix_Quit();
+    Mix_CloseAudio();
     IMG_Quit();
     TTF_Quit();
     SDL_Quit();
+
     return 0;
 }

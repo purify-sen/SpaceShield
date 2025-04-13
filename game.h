@@ -4,79 +4,86 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <vector>
-#include "enemy.h"
-#include "life.h"
+#include "enemy.h"  // Includes Target definition
+#include "mainmenu.h"
 
-#define PI M_PI
-
-struct Circle { int x, y, r; };
+#define PI 3.14159265358979323846
 
 class Game {
-public:
+private:
     SDL_Renderer* renderer;
-    SDL_Texture* missileTexture;
-    SDL_Texture* fastMissileTexture;
-    SDL_Texture* warningTexture;
+    Enemy* enemy;
+    MainMenu* menu;
     SDL_Texture* mspaceshipTexture;
-    SDL_Texture* gameOverTexture;
-    SDL_Texture* pauseTexture;
     SDL_Texture* pauseButtonTexture;
     SDL_Texture* scoreTexture;
     SDL_Texture* highscoreTexture;
     SDL_Texture* pausedTexture;
-    SDL_Texture* volumeTexture;
-    TTF_Font* font;
-    Circle trajectory = {400, 300, 50};
-    SDL_Rect chitbox = {390, 270, 20, 60};
-    SDL_Rect pauseButton = {10, 10, 40, 40};
-    SDL_Rect volumeSlider = {300, 400, 200, 10};
-    SDL_Rect volumeKnob = {364, 395, 20, 20};
-    std::vector<Target> targets;
-    std::vector<Target> fastMissiles;
-    std::vector<Life> lives = {{700, 550, false}, {730, 550, false}, {760, 550, false}};
-    double arcStartAngle = -PI / 10.3;
-    bool gameOver = false;
-    bool paused = false;
-    bool isDraggingKnob = false;
-    bool showWarning = false;
-    Uint32 warningStartTime = 0;
-    // Lưu vị trí cảnh báo
-    float warningX = 0;
-    float warningY = 0;
+    SDL_Texture* backToMenuTexture;
+    SDL_Texture* restartTexture;
+    SDL_Texture* gameOverTextTexture;
+    SDL_Texture* volumeLabelTexture; // Texture cho nhãn "Volume"
+    bool gameOver;
+    bool paused;
+    bool showWarning;
+    bool isFirstFastMissile;
     Uint32 startTime;
-    int missileCount = 1;
-    int waveCount = 0;
-    Uint32 nextSpawnTime = 2000;
-    Uint32 lastMissileSpawnTime = 0;
-    int spawnedMissilesInWave = 0;
+    Uint32 pauseStartTime;
+    Uint32 totalPausedTime;
+    Uint32 warningStartTime;
+    Uint32 nextSpawnTime;
+    Uint32 lastMissileSpawnTime;
+    int score;
+    int warningX;
+    int warningY;
+    int missileCount;
+    int waveCount;
     int wavesUntilIncrease;
-    float defaultMissileSpeed = 150.0f;
-    float maxMissileSpeed = 150.0f;
-    int score = 0;
-    int highscore = 0;
-    int volume = 64;
-    const char* playerDataFile = "playerdata/playerdata";
-    Uint32 pauseStartTime = 0;
-    Uint32 totalPausedTime = 0;
+    int spawnedMissilesInWave;
+    float arcStartAngle;
+    float defaultMissileSpeed;
+    float maxMissileSpeed;
+    int volume; // Giá trị âm lượng (0-128)
+    SDL_Rect volumeSlider; // Thanh trượt âm lượng
+    SDL_Rect volumeKnob; // Nút trượt trên thanh âm lượng
+    bool isDraggingVolume; // Trạng thái kéo thanh trượt
 
-    Game(SDL_Renderer* r, SDL_Texture* mt);
-    ~Game();
-    void handleInput(SDL_Event& event);
-    void update(float deltaTime);
-    void render();
-    void reset();
+    struct Circle {
+        int x, y, r;
+    };
+    struct Life {
+        int x, y;
+        bool isRed;
+    };
+
+    Circle trajectory;
+    SDL_Rect chitbox;
+    SDL_Rect pauseButton;
+    SDL_Rect backToMenuButton;
+    SDL_Rect restartButton;
+    std::vector<Target> targets;      // Use Target from enemy.h
+    std::vector<Target> fastMissiles; // Use Target from enemy.h
+    std::vector<Life> lives;
+
+    void initTextures();
     void updateScoreTexture();
     void updateHighscoreTexture();
     void updatePausedTexture();
-    void updateVolumeTexture();
-    void loadHighscore();
-    void saveHighscore();
-
-private:
-    bool CheckCollisionWithArc(Target& t);
-    bool CheckCollisionWithChitbox(Target& t);
+    void updateGameOverTextTexture();
+    void updateVolumeLabelTexture(); // Hàm mới để tạo nhãn "Volume"
     void DrawCircle(SDL_Renderer* renderer, Circle& c);
     void DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double arcAngle);
+    bool CheckCollisionWithArc(Target& t);
+    bool CheckCollisionWithChitbox(Target& t);
+
+public:
+    Game(SDL_Renderer* r, Enemy* e, MainMenu* m);
+    ~Game();
+    void handleInput(SDL_Event& event, MainMenu& menu);
+    void update(float deltaTime);
+    void render();
+    void reset();
+    bool isGameOver() const { return gameOver; } // Getter for gameOver
 };
 
 #endif

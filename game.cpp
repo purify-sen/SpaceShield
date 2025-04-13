@@ -1,42 +1,60 @@
 #include "game.h"
+#include "mainmenu.h"
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
-#include <fstream>
-#include <filesystem>
 #include <algorithm>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
 
-Game::Game(SDL_Renderer* r, SDL_Texture* mt) 
-    : renderer(r), missileTexture(mt), fastMissileTexture(nullptr), warningTexture(nullptr), 
-      mspaceshipTexture(nullptr), gameOverTexture(nullptr), pauseTexture(nullptr), 
-      pauseButtonTexture(nullptr), scoreTexture(nullptr), highscoreTexture(nullptr), 
-      pausedTexture(nullptr), volumeTexture(nullptr), font(nullptr), gameOver(false), 
-      paused(false), isDraggingKnob(false), showWarning(false), warningStartTime(0), 
-      warningX(0), warningY(0), score(0), highscore(0), volume(64), defaultMissileSpeed(150.0f), 
-      maxMissileSpeed(150.0f), pauseStartTime(0), totalPausedTime(0) {
+Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m) 
+    : renderer(r), enemy(e), menu(m), mspaceshipTexture(nullptr), 
+      pauseButtonTexture(nullptr), scoreTexture(nullptr), 
+      highscoreTexture(nullptr), pausedTexture(nullptr), 
+      backToMenuTexture(nullptr), restartTexture(nullptr), 
+      gameOverTextTexture(nullptr), volumeLabelTexture(nullptr),
+      gameOver(false), paused(false), showWarning(false), 
+      isFirstFastMissile(true), warningStartTime(0), warningX(0), warningY(0), 
+      score(0), pauseStartTime(0), totalPausedTime(0), 
+      volume(128), isDraggingVolume(false),
+      missileCount(1), waveCount(0),
+      nextSpawnTime(2000), lastMissileSpawnTime(0),
+      arcStartAngle(-PI / 10.3),
+      defaultMissileSpeed(100.0f), maxMissileSpeed(100.0f),
+      chitbox{375, 250, 50, 100}, // Sửa: 50x100 để tỷ lệ 1:2, tâm ở (400, 300)
+      pauseButton{750, 10, 40, 40},
+      backToMenuButton{300, 400, 200, 50},
+      restartButton{300, 340, 200, 50},
+      trajectory{400, 300, 60} { // Sửa: Bán kính 60 (đường kính 120 pixel)
     startTime = SDL_GetTicks();
     wavesUntilIncrease = 7 + (rand() % 6);
 
-    font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
-    if (!font) {
-        std::cerr << "TTF_OpenFont failed: " << TTF_GetError() << std::endl;
-        exit(1);
+    // Khởi tạo danh sách mạng sống (3 mạng, hiển thị ở góc trên bên trái)
+    for (int i = 0; i < 3; i++) {
+        Life life = {20 + i * 30, 20, false};
+        lives.push_back(life);
     }
 
+    // Khởi tạo thanh trượt âm lượng
+    volumeSlider = {300, 350, 200, 10};
+    volumeKnob = {300 + (volume * 200 / 128) - 5, 345, 10, 20};
+    Mix_VolumeMusic(volume);
+
+    // Tải texture cho tàu vũ trụ
     SDL_Surface* spaceshipSurface = IMG_Load("images/mspaceship.png");
     if (!spaceshipSurface) {
         std::cerr << "IMG_Load failed for mspaceship.png: " << IMG_GetError() << std::endl;
-    } else {
-        mspaceshipTexture = SDL_CreateTextureFromSurface(renderer, spaceshipSurface);
-        SDL_FreeSurface(spaceshipSurface);
-        if (!mspaceshipTexture) {
-            std::cerr << "SDL_CreateTextureFromSurface failed for mspaceship.png: " << SDL_GetError() << std::endl;
-        }
+        exit(1);
+    }
+    mspaceshipTexture = SDL_CreateTextureFromSurface(renderer, spaceshipSurface);
+    SDL_FreeSurface(spaceshipSurface);
+    if (!mspaceshipTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for mspaceship.png: " << SDL_GetError() << std::endl;
+        exit(1);
     }
 
+    // Tải texture cho nút pause
     SDL_Surface* pauseButtonSurface = IMG_Load("images/pausebutton.png");
     if (!pauseButtonSurface) {
         std::cerr << "IMG_Load failed for pausebutton.png: " << IMG_GetError() << std::endl;
@@ -49,101 +67,58 @@ Game::Game(SDL_Renderer* r, SDL_Texture* mt)
         exit(1);
     }
 
-    SDL_Surface* fastMissileSurface = IMG_Load("images/fmissile.png");
-    if (!fastMissileSurface) {
-        std::cerr << "IMG_Load failed for fmissile.png: " << IMG_GetError() << std::endl;
-        exit(1);
-    }
-    fastMissileTexture = SDL_CreateTextureFromSurface(renderer, fastMissileSurface);
-    SDL_FreeSurface(fastMissileSurface);
-    if (!fastMissileTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for fmissile.png: " << SDL_GetError() << std::endl;
-        exit(1);
-    }
-
-    SDL_Surface* warningSurface = IMG_Load("images/fwarning.png");
-    if (!warningSurface) {
-        std::cerr << "IMG_Load failed for fwarning.png: " << IMG_GetError() << std::endl;
-        exit(1);
-    }
-    warningTexture = SDL_CreateTextureFromSurface(renderer, warningSurface);
-    SDL_FreeSurface(warningSurface);
-    if (!warningTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for fwarning.png: " << SDL_GetError() << std::endl;
-        exit(1);
-    }
-
-    Mix_Volume(-1, volume);
-
-    loadHighscore();
+    updatePausedTexture();
+    updateGameOverTextTexture();
+    updateVolumeLabelTexture();
     updateScoreTexture();
     updateHighscoreTexture();
-    updatePausedTexture();
-    updateVolumeTexture();
+    initTextures();
 }
 
+// Phần còn lại của game.cpp giữ nguyên
 Game::~Game() {
-    saveHighscore();
+    if (mspaceshipTexture) SDL_DestroyTexture(mspaceshipTexture);
+    if (pauseButtonTexture) SDL_DestroyTexture(pauseButtonTexture);
+    if (scoreTexture) SDL_DestroyTexture(scoreTexture);
+    if (highscoreTexture) SDL_DestroyTexture(highscoreTexture);
+    if (pausedTexture) SDL_DestroyTexture(pausedTexture);
+    if (backToMenuTexture) SDL_DestroyTexture(backToMenuTexture);
+    if (restartTexture) SDL_DestroyTexture(restartTexture);
+    if (gameOverTextTexture) SDL_DestroyTexture(gameOverTextTexture);
+    if (volumeLabelTexture) SDL_DestroyTexture(volumeLabelTexture);
+}
 
-    if (font) {
+void Game::initTextures() {
+    SDL_Color textColor = {255, 255, 255, 255};
+    TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
+    if (!font) {
+        std::cerr << "TTF_OpenFont failed for Back to Menu: " << TTF_GetError() << std::endl;
+        return;
+    }
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Back to Menu", textColor);
+    if (!textSurface) {
+        std::cerr << "TTF_RenderText_Solid failed for Back to Menu: " << TTF_GetError() << std::endl;
         TTF_CloseFont(font);
+        return;
     }
-    if (scoreTexture) {
-        SDL_DestroyTexture(scoreTexture);
+    backToMenuTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    if (!backToMenuTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for Back to Menu: " << SDL_GetError() << std::endl;
     }
-    if (highscoreTexture) {
-        SDL_DestroyTexture(highscoreTexture);
-    }
-    if (pausedTexture) {
-        SDL_DestroyTexture(pausedTexture);
-    }
-    if (volumeTexture) {
-        SDL_DestroyTexture(volumeTexture);
-    }
-    if (mspaceshipTexture) {
-        SDL_DestroyTexture(mspaceshipTexture);
-    }
-    if (gameOverTexture) {
-        SDL_DestroyTexture(gameOverTexture);
-    }
-    if (pauseTexture) {
-        SDL_DestroyTexture(pauseTexture);
-    }
-    if (pauseButtonTexture) {
-        SDL_DestroyTexture(pauseButtonTexture);
-    }
-    if (fastMissileTexture) {
-        SDL_DestroyTexture(fastMissileTexture);
-    }
-    if (warningTexture) {
-        SDL_DestroyTexture(warningTexture);
-    }
-}
+    SDL_FreeSurface(textSurface);
 
-void Game::loadHighscore() {
-    std::ifstream file(playerDataFile);
-    if (file.is_open()) {
-        file >> highscore;
-        file.close();
-        std::cout << "Loaded highscore: " << highscore << std::endl;
-    } else {
-        std::cerr << "Could not open file " << playerDataFile << " for reading. Starting with highscore = 0." << std::endl;
-        highscore = 0;
-        saveHighscore();
+    textSurface = TTF_RenderText_Solid(font, "Restart", textColor);
+    if (!textSurface) {
+        std::cerr << "TTF_RenderText_Solid failed for Restart: " << TTF_GetError() << std::endl;
+        TTF_CloseFont(font);
+        return;
     }
-}
-
-void Game::saveHighscore() {
-    std::filesystem::create_directories("playerdata");
-
-    std::ofstream file(playerDataFile);
-    if (file.is_open()) {
-        file << highscore;
-        file.close();
-        std::cout << "Saved highscore: " << highscore << std::endl;
-    } else {
-        std::cerr << "Could not open file " << playerDataFile << " for writing." << std::endl;
+    restartTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    if (!restartTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for Restart: " << SDL_GetError() << std::endl;
     }
+    SDL_FreeSurface(textSurface);
+    TTF_CloseFont(font);
 }
 
 void Game::updateScoreTexture() {
@@ -152,86 +127,101 @@ void Game::updateScoreTexture() {
     std::string scoreStr = ss.str();
 
     SDL_Color textColor = {255, 255, 255, 255};
+    TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, scoreStr.c_str(), textColor);
     if (!textSurface) {
         std::cerr << "TTF_RenderText_Solid failed: " << TTF_GetError() << std::endl;
+        TTF_CloseFont(font);
         return;
     }
 
-    if (scoreTexture) {
-        SDL_DestroyTexture(scoreTexture);
-    }
+    if (scoreTexture) SDL_DestroyTexture(scoreTexture);
     scoreTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-    if (!scoreTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for score: " << SDL_GetError() << std::endl;
-    }
+    TTF_CloseFont(font);
 }
 
 void Game::updateHighscoreTexture() {
     std::stringstream ss;
+    int highscore = menu->highscores.empty() ? 0 : menu->highscores[0];
     ss << "Highscore: " << highscore;
     std::string highscoreStr = ss.str();
 
     SDL_Color textColor = {255, 255, 255, 255};
+    TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, highscoreStr.c_str(), textColor);
     if (!textSurface) {
         std::cerr << "TTF_RenderText_Solid failed: " << TTF_GetError() << std::endl;
+        TTF_CloseFont(font);
         return;
     }
 
-    if (highscoreTexture) {
-        SDL_DestroyTexture(highscoreTexture);
-    }
+    if (highscoreTexture) SDL_DestroyTexture(highscoreTexture);
     highscoreTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-    if (!highscoreTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for highscore: " << SDL_GetError() << std::endl;
-    }
+    TTF_CloseFont(font);
 }
 
 void Game::updatePausedTexture() {
     std::string pausedStr = "Paused";
     SDL_Color textColor = {255, 255, 255, 255};
+    TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, pausedStr.c_str(), textColor);
     if (!textSurface) {
         std::cerr << "TTF_RenderText_Solid failed: " << TTF_GetError() << std::endl;
+        TTF_CloseFont(font);
         return;
     }
 
-    if (pausedTexture) {
-        SDL_DestroyTexture(pausedTexture);
-    }
+    if (pausedTexture) SDL_DestroyTexture(pausedTexture);
     pausedTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-    if (!pausedTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for paused: " << TTF_GetError() << std::endl;
-    }
+    TTF_CloseFont(font);
 }
 
-void Game::updateVolumeTexture() {
-    std::stringstream ss;
-    ss << "Volume: " << volume;
-    std::string volumeStr = ss.str();
-
+void Game::updateGameOverTextTexture() {
+    std::string gameOverStr = "Game over";
     SDL_Color textColor = {255, 255, 255, 255};
-    SDL_Surface* textSurface = TTF_RenderText_Solid(font, volumeStr.c_str(), textColor);
+    TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 48);
+    if (!font) {
+        std::cerr << "TTF_OpenFont failed for Game over: " << TTF_GetError() << std::endl;
+        return;
+    }
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, gameOverStr.c_str(), textColor);
     if (!textSurface) {
-        std::cerr << "TTF_RenderText_Solid failed: " << TTF_GetError() << std::endl;
+        std::cerr << "TTF_RenderText_Solid failed for Game over: " << TTF_GetError() << std::endl;
+        TTF_CloseFont(font);
         return;
     }
 
-    if (volumeTexture) {
-        SDL_DestroyTexture(volumeTexture);
-    }
-    volumeTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    if (gameOverTextTexture) SDL_DestroyTexture(gameOverTextTexture);
+    gameOverTextTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-    if (!volumeTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for volume: " << SDL_GetError() << std::endl;
-    }
+    TTF_CloseFont(font);
 }
 
-void Game::handleInput(SDL_Event& event) {
+void Game::updateVolumeLabelTexture() {
+    std::string volumeLabelStr = "Volume";
+    SDL_Color textColor = {255, 255, 255, 255};
+    TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 24);
+    if (!font) {
+        std::cerr << "TTF_OpenFont failed for Volume: " << TTF_GetError() << std::endl;
+        return;
+    }
+    SDL_Surface* textSurface = TTF_RenderText_Solid(font, volumeLabelStr.c_str(), textColor);
+    if (!textSurface) {
+        std::cerr << "TTF_RenderText_Solid failed for Volume: " << TTF_GetError() << std::endl;
+        TTF_CloseFont(font);
+        return;
+    }
+
+    if (volumeLabelTexture) SDL_DestroyTexture(volumeLabelTexture);
+    volumeLabelTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_FreeSurface(textSurface);
+    TTF_CloseFont(font);
+}
+
+void Game::handleInput(SDL_Event& event, MainMenu& menu) {
     if (event.type == SDL_MOUSEBUTTONDOWN) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
@@ -241,95 +231,103 @@ void Game::handleInput(SDL_Event& event) {
             if (!paused) {
                 pauseStartTime = SDL_GetTicks();
                 paused = true;
+                menu.gameState = MainMenu::PAUSED;
             } else {
                 totalPausedTime += SDL_GetTicks() - pauseStartTime;
                 paused = false;
                 pauseStartTime = 0;
+                menu.gameState = MainMenu::PLAYING;
             }
-            isDraggingKnob = false;
         }
 
-        if (paused) {
-            if (mouseX >= volumeKnob.x && mouseX <= volumeKnob.x + volumeKnob.w &&
-                mouseY >= volumeKnob.y && mouseY <= volumeKnob.y + volumeKnob.h) {
-                isDraggingKnob = true;
-            }
+        if (paused && mouseX >= volumeKnob.x && mouseX <= volumeKnob.x + volumeKnob.w &&
+            mouseY >= volumeKnob.y && mouseY <= volumeKnob.y + volumeKnob.h) {
+            isDraggingVolume = true;
         }
 
         if (gameOver) {
-            saveHighscore();
-            reset();
+            if (mouseX >= backToMenuButton.x && mouseX <= backToMenuButton.x + backToMenuButton.w &&
+                mouseY >= backToMenuButton.y && mouseY <= backToMenuButton.y + backToMenuButton.h) {
+                reset();
+                menu.gameState = MainMenu::MENU;
+            }
+            if (mouseX >= restartButton.x && mouseX <= restartButton.x + restartButton.w &&
+                mouseY >= restartButton.y && mouseY <= restartButton.y + restartButton.h) {
+                reset();
+                menu.gameState = MainMenu::PLAYING;
+            }
         }
     }
-    else if (event.type == SDL_MOUSEBUTTONUP) {
-        isDraggingKnob = false;
+
+    if (event.type == SDL_MOUSEBUTTONUP) {
+        isDraggingVolume = false;
     }
-    else if (event.type == SDL_MOUSEMOTION && isDraggingKnob) {
+
+    if (event.type == SDL_MOUSEMOTION && isDraggingVolume) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
 
         int newX = mouseX - volumeKnob.w / 2;
         if (newX < volumeSlider.x) newX = volumeSlider.x;
-        if (newX > volumeSlider.x + volumeSlider.w - volumeKnob.w) {
-            newX = volumeSlider.x + volumeSlider.w - volumeKnob.w;
-        }
-
+        if (newX > volumeSlider.x + volumeSlider.w - volumeKnob.w) newX = volumeSlider.x + volumeSlider.w - volumeKnob.w;
         volumeKnob.x = newX;
 
-        float position = (float)(volumeKnob.x - volumeSlider.x) / (volumeSlider.w - volumeKnob.w);
-        volume = (int)(position * 128);
-        Mix_Volume(-1, volume);
-        updateVolumeTexture();
+        volume = ((newX - volumeSlider.x) * 128) / volumeSlider.w;
+        Mix_VolumeMusic(volume);
+    }
+
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+        if (!paused && !gameOver) {
+            pauseStartTime = SDL_GetTicks();
+            paused = true;
+            menu.gameState = MainMenu::PAUSED;
+        } else if (paused) {
+            totalPausedTime += SDL_GetTicks() - pauseStartTime;
+            paused = false;
+            pauseStartTime = 0;
+            menu.gameState = MainMenu::PLAYING;
+        }
     }
 }
 
 void Game::update(float deltaTime) {
-    if (gameOver) {
-        return;
-    }
+    if (gameOver) return;
 
-    // Tính thời gian hiệu quả, trừ đi thời gian đã pause
     Uint32 currentTime = SDL_GetTicks() - startTime - totalPausedTime;
 
-    // Logic chỉ chạy khi không pause
     if (!paused) {
-        // Input điều khiển vòng cung
         const Uint8* keys = SDL_GetKeyboardState(NULL);
         if (keys[SDL_SCANCODE_A]) arcStartAngle -= 2 * PI * deltaTime;
         if (keys[SDL_SCANCODE_D]) arcStartAngle += 2 * PI * deltaTime;
 
-        // Kiểm tra và hiển thị cảnh báo cho Fast Missile
         if (waveCount >= 9 && (waveCount - 9) % 3 == 0 && fastMissiles.empty() && !showWarning) {
-            // Kích hoạt cảnh báo nếu chưa có Fast Missile và chưa hiển thị cảnh báo
             showWarning = true;
             warningStartTime = currentTime;
-            // Chọn vị trí cho Fast Missile và lưu vị trí cảnh báo, dịch vào trong 20 pixel
             int side = rand() % 4;
             switch (side) {
-                case 0: warningX = 20; warningY = rand() % 560 + 20; break; // Trái (vào 20 pixel, y từ 20 đến 580)
-                case 1: warningX = 780; warningY = rand() % 560 + 20; break; // Phải (vào 20 pixel, y từ 20 đến 580)
-                case 2: warningX = rand() % 760 + 20; warningY = 20; break; // Trên (vào 20 pixel, x từ 20 đến 780)
-                case 3: warningX = rand() % 760 + 20; warningY = 580; break; // Dưới (vào 20 pixel, x từ 20 đến 780)
+                case 0: warningX = 20; warningY = rand() % 560 + 20; break;
+                case 1: warningX = 780; warningY = rand() % 560 + 20; break;
+                case 2: warningX = rand() % 760 + 20; warningY = 20; break;
+                case 3: warningX = rand() % 760 + 20; warningY = 580; break;
             }
         }
 
-        // Sau 2 giây hiển thị cảnh báo, sinh Fast Missile tại vị trí đã lưu
         if (showWarning && (currentTime - warningStartTime >= 2000)) {
-            showWarning = false; // Tắt cảnh báo
+            showWarning = false;
             Target fm;
             fm.x = warningX;
             fm.y = warningY;
             float distX = 400 - fm.x, distY = 300 - fm.y;
             float distance = sqrt(distX * distX + distY * distY);
             if (distance < 1e-6) distance = 1.0f;
-            float missileSpeed = defaultMissileSpeed * 2.5f; // Tốc độ Fast Missile gấp 2.5 lần
+            float missileSpeed = defaultMissileSpeed * 4.5f;
             fm.dx = (distX / distance) * missileSpeed;
             fm.dy = (distY / distance) * missileSpeed;
             fm.active = true;
             fastMissiles.push_back(fm);
+            isFirstFastMissile = false;
         }
 
-        // Sinh tên lửa thường
         if (currentTime >= nextSpawnTime) {
             if (spawnedMissilesInWave < missileCount) {
                 if (currentTime - lastMissileSpawnTime >= 300 || spawnedMissilesInWave == 0) {
@@ -356,19 +354,16 @@ void Game::update(float deltaTime) {
             }
         }
 
-        // Cập nhật wave
         if (spawnedMissilesInWave >= missileCount && currentTime >= nextSpawnTime) {
             waveCount++;
             if (waveCount % wavesUntilIncrease == 0) {
                 missileCount++;
                 if (missileCount > 5) missileCount = 5;
-                std::cout << "Missile count increased to: " << missileCount << std::endl;
             }
             nextSpawnTime += 3000 + (rand() % 2001);
             spawnedMissilesInWave = 0;
         }
 
-        // Di chuyển và kiểm tra va chạm cho tên lửa thường
         for (auto& t : targets) {
             if (t.active) {
                 t.x += t.dx * deltaTime;
@@ -377,11 +372,6 @@ void Game::update(float deltaTime) {
                     t.active = false;
                     score++;
                     updateScoreTexture();
-                    if (score > highscore) {
-                        highscore = score;
-                        saveHighscore();
-                        updateHighscoreTexture();
-                    }
                 }
                 else if (CheckCollisionWithChitbox(t)) {
                     t.active = false;
@@ -397,13 +387,14 @@ void Game::update(float deltaTime) {
                     }
                     if (allRed) {
                         gameOver = true;
-                        saveHighscore();
+                        menu->saveHighscores(score);
+                        updateScoreTexture();
+                        updateHighscoreTexture();
                     }
                 }
             }
         }
 
-        // Di chuyển và kiểm tra va chạm cho Fast Missile
         for (auto& fm : fastMissiles) {
             if (fm.active) {
                 fm.x += fm.dx * deltaTime;
@@ -412,11 +403,6 @@ void Game::update(float deltaTime) {
                     fm.active = false;
                     score += 2;
                     updateScoreTexture();
-                    if (score > highscore) {
-                        highscore = score;
-                        saveHighscore();
-                        updateHighscoreTexture();
-                    }
                 }
                 else if (CheckCollisionWithChitbox(fm)) {
                     fm.active = false;
@@ -432,13 +418,14 @@ void Game::update(float deltaTime) {
                     }
                     if (allRed) {
                         gameOver = true;
-                        saveHighscore();
+                        menu->saveHighscores(score);
+                        updateScoreTexture();
+                        updateHighscoreTexture();
                     }
                 }
             }
         }
 
-        // Xóa tên lửa không hoạt động
         targets.erase(
             std::remove_if(targets.begin(), targets.end(), [](Target& t) { return !t.active; }),
             targets.end()
@@ -463,44 +450,20 @@ void Game::render() {
         DrawCircle(renderer, trajectory);
         DrawArc(renderer, trajectory, arcStartAngle, 2 * PI / 3);
 
-        // Vẽ tên lửa thường
-        for (auto& t : targets) {
-            if (t.active && missileTexture) {
-                double angle = atan2(t.dy, t.dx) * 180.0 / PI;
-                SDL_Rect missileRect = {(int)t.x - 10, (int)t.y - 15, 30, 30};
-                SDL_Point center = {10, 15};
-                SDL_RenderCopyEx(renderer, missileTexture, NULL, &missileRect, angle, &center, SDL_FLIP_NONE);
-            }
-        }
-
-        // Vẽ Fast Missile
-        for (auto& fm : fastMissiles) {
-            if (fm.active && fastMissileTexture) {
-                double angle = atan2(fm.dy, fm.dx) * 180.0 / PI;
-                SDL_Rect missileRect = {(int)fm.x - 10, (int)fm.y - 15, 20, 30};
-                SDL_Point center = {10, 15};
-                SDL_RenderCopyEx(renderer, fastMissileTexture, NULL, &missileRect, angle, &center, SDL_FLIP_NONE);
-            }
-        }
-
         for (auto& life : lives) {
             Circle lifeCircle = {life.x, life.y, 10};
             SDL_SetRenderDrawColor(renderer, life.isRed ? 255 : 0, 0, life.isRed ? 0 : 255, 255);
             DrawCircle(renderer, lifeCircle);
         }
 
-        // Hiển thị cảnh báo Fast Missile với hiệu ứng nhấp nháy
-        if (showWarning && warningTexture) {
-            // Tính alpha cho hiệu ứng nhấp nháy (dao động từ 50 đến 255)
-            Uint32 elapsedTime = SDL_GetTicks() - startTime - totalPausedTime - warningStartTime;
-            float alpha = 152.5f + 102.5f * sin(2 * PI * 2 * elapsedTime / 1000.0f); // 2 lần nhấp nháy mỗi giây
-            SDL_SetTextureAlphaMod(warningTexture, static_cast<Uint8>(alpha));
-
-            SDL_Rect warningRect = {(int)warningX - 15, (int)warningY - 22, 30, 45}; // Kích thước 30x45
-            SDL_RenderCopy(renderer, warningTexture, NULL, &warningRect);
-
-            // Đặt lại alpha về 255 để không ảnh hưởng đến các texture khác
-            SDL_SetTextureAlphaMod(warningTexture, 255);
+        for (auto& t : targets) {
+            enemy->renderTarget(t);
+        }
+        for (auto& fm : fastMissiles) {
+            enemy->renderFastMissile(fm);
+        }
+        if (showWarning) {
+            enemy->renderWarning(warningX, warningY, warningStartTime, startTime, totalPausedTime);
         }
     }
 
@@ -508,31 +471,40 @@ void Game::render() {
         SDL_RenderCopy(renderer, pauseButtonTexture, NULL, &pauseButton);
     }
 
-    if (scoreTexture) {
-        int w, h;
-        SDL_QueryTexture(scoreTexture, NULL, NULL, &w, &h);
-        SDL_Rect scoreRect = {800 - w - 10, 10, w, h};
-        SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreRect);
-    }
-    if (highscoreTexture) {
-        int w, h;
-        SDL_QueryTexture(highscoreTexture, NULL, NULL, &w, &h);
-        SDL_Rect highscoreRect = {800 - w - 10, 40, w, h};
-        SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
-    }
-
-    if (gameOver && !gameOverTexture) {
-        SDL_Surface* textSurface = IMG_Load("images/gameover.png");
-        if (!textSurface) {
-            std::cerr << "Không thể tải hình ảnh gameover.png: " << IMG_GetError() << std::endl;
-            return;
-        }
-        gameOverTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-        SDL_FreeSurface(textSurface);
-    }
     if (gameOver) {
-        SDL_Rect textRect = {800 / 2 - 150, 600 / 2 - 150, 300, 300};
-        SDL_RenderCopy(renderer, gameOverTexture, NULL, &textRect);
+        if (gameOverTextTexture) {
+            int w, h;
+            SDL_QueryTexture(gameOverTextTexture, NULL, NULL, &w, &h);
+            SDL_Rect gameOverRect = {400 - w / 2, 100, w, h};
+            SDL_RenderCopy(renderer, gameOverTextTexture, NULL, &gameOverRect);
+        }
+
+        if (scoreTexture) {
+            int w, h;
+            SDL_QueryTexture(scoreTexture, NULL, NULL, &w, &h);
+            SDL_Rect scoreRect = {400 - w / 2, 300, w, h};
+            SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreRect);
+        }
+
+        if (highscoreTexture) {
+            int w, h;
+            SDL_QueryTexture(highscoreTexture, NULL, NULL, &w, &h);
+            SDL_Rect highscoreRect = {400 - w / 2, 340, w, h};
+            SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
+        }
+
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+        SDL_RenderFillRect(renderer, &restartButton);
+        int w, h;
+        SDL_QueryTexture(restartTexture, NULL, NULL, &w, &h);
+        SDL_Rect restartTextRect = {restartButton.x + (restartButton.w - w) / 2, restartButton.y + (restartButton.h - h) / 2, w, h};
+        SDL_RenderCopy(renderer, restartTexture, NULL, &restartTextRect);
+
+        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+        SDL_RenderFillRect(renderer, &backToMenuButton);
+        SDL_QueryTexture(backToMenuTexture, NULL, NULL, &w, &h);
+        SDL_Rect backToMenuTextRect = {backToMenuButton.x + (backToMenuButton.w - w) / 2, backToMenuButton.y + (backToMenuButton.h - h) / 2, w, h};
+        SDL_RenderCopy(renderer, backToMenuTexture, NULL, &backToMenuTextRect);
     }
 
     if (paused) {
@@ -545,22 +517,35 @@ void Game::render() {
         if (pausedTexture) {
             int w, h;
             SDL_QueryTexture(pausedTexture, NULL, NULL, &w, &h);
-            SDL_Rect pausedRect = {800 / 2 - w / 2, 300 - h / 2, w, h};
+            SDL_Rect pausedRect = {800 / 2 - w / 2, 200 - h / 2, w, h};
             SDL_RenderCopy(renderer, pausedTexture, NULL, &pausedRect);
         }
 
-        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
-        SDL_RenderFillRect(renderer, &volumeSlider);
-
-        SDL_SetRenderDrawColor(renderer, isDraggingKnob ? 255 : 200, isDraggingKnob ? 255 : 200, isDraggingKnob ? 0 : 255, 255);
-        SDL_RenderFillRect(renderer, &volumeKnob);
-
-        if (volumeTexture) {
+        if (scoreTexture) {
             int w, h;
-            SDL_QueryTexture(volumeTexture, NULL, NULL, &w, &h);
-            SDL_Rect volumeRect = {800 / 2 - w / 2, volumeSlider.y - h - 20, w, h};
-            SDL_RenderCopy(renderer, volumeTexture, NULL, &volumeRect);
+            SDL_QueryTexture(scoreTexture, NULL, NULL, &w, &h);
+            SDL_Rect scoreRect = {400 - w / 2, 260, w, h};
+            SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreRect);
         }
+
+        if (highscoreTexture) {
+            int w, h;
+            SDL_QueryTexture(highscoreTexture, NULL, NULL, &w, &h);
+            SDL_Rect highscoreRect = {400 - w / 2, 300, w, h};
+            SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
+        }
+
+        if (volumeLabelTexture) {
+            int w, h;
+            SDL_QueryTexture(volumeLabelTexture, NULL, NULL, &w, &h);
+            SDL_Rect volumeLabelRect = {400 - w / 2, 320, w, h};
+            SDL_RenderCopy(renderer, volumeLabelTexture, NULL, &volumeLabelRect);
+        }
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderFillRect(renderer, &volumeSlider);
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderFillRect(renderer, &volumeKnob);
     }
 
     SDL_RenderPresent(renderer);
@@ -569,8 +554,8 @@ void Game::render() {
 void Game::reset() {
     gameOver = false;
     paused = false;
-    isDraggingKnob = false;
     showWarning = false;
+    isFirstFastMissile = true;
     warningStartTime = 0;
     warningX = 0;
     warningY = 0;
@@ -583,22 +568,33 @@ void Game::reset() {
     waveCount = 0;
     maxMissileSpeed = defaultMissileSpeed;
     score = 0;
-    updateScoreTexture();
     nextSpawnTime = 2000;
     spawnedMissilesInWave = 0;
     lastMissileSpawnTime = 0;
     startTime = SDL_GetTicks();
     arcStartAngle = -PI / 10.3;
     wavesUntilIncrease = 7 + (rand() % 6);
-    volume = 64;
-    volumeKnob.x = 364;
-    updateVolumeTexture();
     pauseStartTime = 0;
     totalPausedTime = 0;
-    if (gameOverTexture) {
-        SDL_DestroyTexture(gameOverTexture);
-        gameOverTexture = nullptr;
+    if (backToMenuTexture) {
+        SDL_DestroyTexture(backToMenuTexture);
+        backToMenuTexture = nullptr;
     }
+    if (restartTexture) {
+        SDL_DestroyTexture(restartTexture);
+        restartTexture = nullptr;
+    }
+    if (scoreTexture) {
+        SDL_DestroyTexture(scoreTexture);
+        scoreTexture = nullptr;
+    }
+    if (highscoreTexture) {
+        SDL_DestroyTexture(highscoreTexture);
+        highscoreTexture = nullptr;
+    }
+    initTextures();
+    updateScoreTexture();
+    updateHighscoreTexture();
 }
 
 bool Game::CheckCollisionWithArc(Target& t) {
