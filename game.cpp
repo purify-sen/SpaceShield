@@ -15,31 +15,31 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
       backToMenuTexture(nullptr), restartTexture(nullptr), 
       gameOverTextTexture(nullptr), volumeLabelTexture(nullptr),
       gameOver(false), paused(false), showWarning(false), 
-      isFirstFastMissile(true), warningStartTime(0), warningX(0), warningY(0), 
+      isFirstFastMissile(true), justStarted(false),
+      warningStartTime(0), warningX(0), warningY(0), 
       score(0), pauseStartTime(0), totalPausedTime(0), 
-      volume(128), isDraggingVolume(false),
+      volume(100), isDraggingVolume(false),
       missileCount(1), waveCount(0),
       nextSpawnTime(2000), lastMissileSpawnTime(0),
       arcStartAngle(-PI / 10.3),
       defaultMissileSpeed(100.0f), maxMissileSpeed(100.0f),
-      chitbox{375, 250, 50, 100}, // Sửa: 50x100 để tỷ lệ 1:2, tâm ở (400, 300)
+      chitbox{375, 250, 50, 100},
       pauseButton{750, 10, 40, 40},
       backToMenuButton{300, 400, 200, 50},
       restartButton{300, 340, 200, 50},
-      trajectory{400, 300, 60} { // Sửa: Bán kính 60 (đường kính 120 pixel)
-    startTime = SDL_GetTicks();
+      trajectory{400, 300, 60} {
     wavesUntilIncrease = 7 + (rand() % 6);
 
-    // Khởi tạo danh sách mạng sống (3 mạng, hiển thị ở góc trên bên trái)
+    // Khởi tạo danh sách mạng sống
     for (int i = 0; i < 3; i++) {
         Life life = {20 + i * 30, 20, false};
         lives.push_back(life);
     }
 
-    // Khởi tạo thanh trượt âm lượng
-    volumeSlider = {300, 350, 200, 10};
-    volumeKnob = {300 + (volume * 200 / 128) - 5, 345, 10, 20};
-    Mix_VolumeMusic(volume);
+    // Khởi tạo thanh trượt âm lượng, đồng bộ với settings
+    volumeSlider = {300, 420, 200, 10};
+    volumeKnob = {300 + (volume * 200 / 100) - 5, 415, 10, 20};
+    Mix_VolumeMusic(volume * 128 / 100);
 
     // Tải texture cho tàu vũ trụ
     SDL_Surface* spaceshipSurface = IMG_Load("images/mspaceship.png");
@@ -75,7 +75,6 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
     initTextures();
 }
 
-// Phần còn lại của game.cpp giữ nguyên
 Game::~Game() {
     if (mspaceshipTexture) SDL_DestroyTexture(mspaceshipTexture);
     if (pauseButtonTexture) SDL_DestroyTexture(pauseButtonTexture);
@@ -255,6 +254,7 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
                 mouseY >= restartButton.y && mouseY <= restartButton.y + restartButton.h) {
                 reset();
                 menu.gameState = MainMenu::PLAYING;
+                startGame(); // Đặt lại thời gian khi restart
             }
         }
     }
@@ -272,8 +272,9 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
         if (newX > volumeSlider.x + volumeSlider.w - volumeKnob.w) newX = volumeSlider.x + volumeSlider.w - volumeKnob.w;
         volumeKnob.x = newX;
 
-        volume = ((newX - volumeSlider.x) * 128) / volumeSlider.w;
-        Mix_VolumeMusic(volume);
+        int newVolume = ((newX - volumeSlider.x) * 100) / volumeSlider.w;
+        setVolume(newVolume);
+        menu.volume = volume;
     }
 
     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
@@ -300,6 +301,16 @@ void Game::update(float deltaTime) {
         if (keys[SDL_SCANCODE_A]) arcStartAngle -= 2 * PI * deltaTime;
         if (keys[SDL_SCANCODE_D]) arcStartAngle += 2 * PI * deltaTime;
 
+        // Kiểm tra và tăng maxMissileSpeed sau mỗi 5 wave
+        static int lastWaveIncreased = 0;
+        if (waveCount > lastWaveIncreased && waveCount % 5 == 0) {
+            maxMissileSpeed *= 1.3f;
+            maxMissileSpeed = std::min(maxMissileSpeed, defaultMissileSpeed * 2.5f);
+            lastWaveIncreased = waveCount;
+            std::cout << "Maximum missile speed updated to: " << maxMissileSpeed << " pixels/s" << std::endl;
+        }
+
+        // Tạo tên lửa nhanh
         if (waveCount >= 9 && (waveCount - 9) % 3 == 0 && fastMissiles.empty() && !showWarning) {
             showWarning = true;
             warningStartTime = currentTime;
@@ -320,7 +331,8 @@ void Game::update(float deltaTime) {
             float distX = 400 - fm.x, distY = 300 - fm.y;
             float distance = sqrt(distX * distX + distY * distY);
             if (distance < 1e-6) distance = 1.0f;
-            float missileSpeed = defaultMissileSpeed * 4.5f;
+            float baseSpeed = defaultMissileSpeed + static_cast<float>(rand()) / RAND_MAX * (maxMissileSpeed - defaultMissileSpeed);
+            float missileSpeed = baseSpeed * 4.5f;
             fm.dx = (distX / distance) * missileSpeed;
             fm.dy = (distY / distance) * missileSpeed;
             fm.active = true;
@@ -328,7 +340,9 @@ void Game::update(float deltaTime) {
             isFirstFastMissile = false;
         }
 
-        if (currentTime >= nextSpawnTime) {
+        // Tạo tên lửa thường và chuyển wave
+        bool waveAdvanced = false;
+        if (!justStarted && currentTime >= nextSpawnTime) {
             if (spawnedMissilesInWave < missileCount) {
                 if (currentTime - lastMissileSpawnTime >= 300 || spawnedMissilesInWave == 0) {
                     Target t;
@@ -342,7 +356,7 @@ void Game::update(float deltaTime) {
                     float distX = 400 - t.x, distY = 300 - t.y;
                     float distance = sqrt(distX * distX + distY * distY);
                     if (distance < 1e-6) distance = 1.0f;
-                    float missileSpeed = defaultMissileSpeed;
+                    float missileSpeed = defaultMissileSpeed + static_cast<float>(rand()) / RAND_MAX * (maxMissileSpeed - defaultMissileSpeed);
                     t.dx = (distX / distance) * missileSpeed;
                     t.dy = (distY / distance) * missileSpeed;
                     t.active = true;
@@ -354,14 +368,19 @@ void Game::update(float deltaTime) {
             }
         }
 
-        if (spawnedMissilesInWave >= missileCount && currentTime >= nextSpawnTime) {
+        if (!justStarted && spawnedMissilesInWave >= missileCount && currentTime >= nextSpawnTime && !waveAdvanced) {
             waveCount++;
             if (waveCount % wavesUntilIncrease == 0) {
                 missileCount++;
                 if (missileCount > 5) missileCount = 5;
             }
-            nextSpawnTime += 3000 + (rand() % 2001);
+            nextSpawnTime = currentTime + 3000 + (rand() % 2001);
             spawnedMissilesInWave = 0;
+            waveAdvanced = true;
+        }
+
+        if (justStarted) {
+            justStarted = false;
         }
 
         for (auto& t : targets) {
@@ -538,7 +557,7 @@ void Game::render() {
         if (volumeLabelTexture) {
             int w, h;
             SDL_QueryTexture(volumeLabelTexture, NULL, NULL, &w, &h);
-            SDL_Rect volumeLabelRect = {400 - w / 2, 320, w, h};
+            SDL_Rect volumeLabelRect = {400 - w / 2, 390, w, h};
             SDL_RenderCopy(renderer, volumeLabelTexture, NULL, &volumeLabelRect);
         }
 
@@ -571,11 +590,11 @@ void Game::reset() {
     nextSpawnTime = 2000;
     spawnedMissilesInWave = 0;
     lastMissileSpawnTime = 0;
-    startTime = SDL_GetTicks();
     arcStartAngle = -PI / 10.3;
     wavesUntilIncrease = 7 + (rand() % 6);
     pauseStartTime = 0;
     totalPausedTime = 0;
+    justStarted = false;
     if (backToMenuTexture) {
         SDL_DestroyTexture(backToMenuTexture);
         backToMenuTexture = nullptr;

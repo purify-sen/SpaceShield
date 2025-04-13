@@ -42,6 +42,10 @@ int main(int argc, char* argv[]) {
     Enemy enemy(renderer, missileTexture);
     Game game(renderer, &enemy, &menu);
 
+    // Đồng bộ âm lượng ban đầu
+    game.setVolume(menu.volume);
+    Mix_VolumeMusic(game.getVolume() * 128 / 100);
+
     bool running = true;
     SDL_Event event;
     Uint32 lastTime = SDL_GetTicks();
@@ -53,7 +57,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (menu.gameState == MainMenu::MENU || menu.gameState == MainMenu::HIGHSCORE || menu.gameState == MainMenu::SETTINGS) {
-                menu.handleInput(event, running);
+                menu.handleInput(event, running, game);
             }
             else if (menu.gameState == MainMenu::PLAYING || menu.gameState == MainMenu::PAUSED || menu.gameState == MainMenu::GAME_OVER) {
                 game.handleInput(event, menu);
@@ -66,7 +70,7 @@ int main(int argc, char* argv[]) {
 
         if (menu.gameState == MainMenu::PLAYING) {
             game.update(deltaTime);
-            if (game.isGameOver()) { // Use getter method
+            if (game.isGameOver()) {
                 menu.gameState = MainMenu::GAME_OVER;
                 menu.updateHighscoreListTexture();
             }

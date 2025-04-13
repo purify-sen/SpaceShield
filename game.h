@@ -3,8 +3,9 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
 #include <vector>
-#include "enemy.h"  // Includes Target definition
+#include "enemy.h"
 #include "mainmenu.h"
 
 #define PI 3.14159265358979323846
@@ -22,11 +23,12 @@ private:
     SDL_Texture* backToMenuTexture;
     SDL_Texture* restartTexture;
     SDL_Texture* gameOverTextTexture;
-    SDL_Texture* volumeLabelTexture; // Texture cho nhãn "Volume"
+    SDL_Texture* volumeLabelTexture;
     bool gameOver;
     bool paused;
     bool showWarning;
     bool isFirstFastMissile;
+    bool justStarted; // Theo dõi trạng thái vừa bắt đầu chơi
     Uint32 startTime;
     Uint32 pauseStartTime;
     Uint32 totalPausedTime;
@@ -43,10 +45,10 @@ private:
     float arcStartAngle;
     float defaultMissileSpeed;
     float maxMissileSpeed;
-    int volume; // Giá trị âm lượng (0-128)
-    SDL_Rect volumeSlider; // Thanh trượt âm lượng
-    SDL_Rect volumeKnob; // Nút trượt trên thanh âm lượng
-    bool isDraggingVolume; // Trạng thái kéo thanh trượt
+    int volume; // Giá trị âm lượng (0-100, đồng bộ với settings)
+    SDL_Rect volumeSlider; // Thanh trượt âm lượng, giống settings
+    SDL_Rect volumeKnob; // Nút trượt, giống settings
+    bool isDraggingVolume;
 
     struct Circle {
         int x, y, r;
@@ -61,8 +63,8 @@ private:
     SDL_Rect pauseButton;
     SDL_Rect backToMenuButton;
     SDL_Rect restartButton;
-    std::vector<Target> targets;      // Use Target from enemy.h
-    std::vector<Target> fastMissiles; // Use Target from enemy.h
+    std::vector<Target> targets;
+    std::vector<Target> fastMissiles;
     std::vector<Life> lives;
 
     void initTextures();
@@ -70,7 +72,7 @@ private:
     void updateHighscoreTexture();
     void updatePausedTexture();
     void updateGameOverTextTexture();
-    void updateVolumeLabelTexture(); // Hàm mới để tạo nhãn "Volume"
+    void updateVolumeLabelTexture();
     void DrawCircle(SDL_Renderer* renderer, Circle& c);
     void DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double arcAngle);
     bool CheckCollisionWithArc(Target& t);
@@ -83,7 +85,19 @@ public:
     void update(float deltaTime);
     void render();
     void reset();
-    bool isGameOver() const { return gameOver; } // Getter for gameOver
+    bool isGameOver() const { return gameOver; }
+    int getVolume() const { return volume; }
+    void setVolume(int vol) {
+        if (vol >= 0 && vol <= 100) {
+            volume = vol;
+            volumeKnob.x = volumeSlider.x + (volume * volumeSlider.w / 100) - volumeKnob.w / 2;
+            Mix_VolumeMusic(volume * 128 / 100);
+        }
+    }
+    void startGame() {
+        startTime = SDL_GetTicks();
+        justStarted = true;
+    }
 };
 
 #endif

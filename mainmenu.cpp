@@ -1,4 +1,5 @@
 #include "mainmenu.h"
+#include "game.h"
 #include <sstream>
 #include <iostream>
 #include <fstream>
@@ -11,7 +12,8 @@ MainMenu::MainMenu(SDL_Renderer* r, TTF_Font* f)
     : renderer(r), font(f), titleTexture(nullptr), playButtonTexture(nullptr), 
       highscoreButtonTexture(nullptr), settingsButtonTexture(nullptr), exitButtonTexture(nullptr), 
       highscoreTitleTexture(nullptr), highscoreListTexture(nullptr), settingsTitleTexture(nullptr), 
-      backButtonTexture(nullptr), volumeTexture(nullptr), volume(64), isDraggingKnob(false), gameState(MENU) {
+      backButtonTexture(nullptr), volumeTexture(nullptr), 
+      volume(100), isDraggingKnob(false), gameState(MENU) {
     SDL_Color textColor = {255, 255, 255, 255};
 
     SDL_Surface* titleSurface = TTF_RenderText_Solid(font, "Space Shield", textColor);
@@ -46,7 +48,7 @@ MainMenu::MainMenu(SDL_Renderer* r, TTF_Font* f)
     backButtonTexture = SDL_CreateTextureFromSurface(renderer, backSurface);
     SDL_FreeSurface(backSurface);
 
-    Mix_Volume(-1, volume);
+    Mix_Volume(-1, volume * 128 / 100);
     loadHighscores();
     updateHighscoreListTexture();
     updateVolumeTexture();
@@ -134,7 +136,7 @@ void MainMenu::updateVolumeTexture() {
     SDL_FreeSurface(textSurface);
 }
 
-void MainMenu::handleInput(SDL_Event& event, bool& running) {
+void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
     if (event.type == SDL_MOUSEBUTTONDOWN) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
@@ -143,13 +145,15 @@ void MainMenu::handleInput(SDL_Event& event, bool& running) {
             if (mouseX >= playButton.x && mouseX <= playButton.x + playButton.w &&
                 mouseY >= playButton.y && mouseY <= playButton.y + playButton.h) {
                 gameState = PLAYING;
+                game.startGame();
+                game.reset(); // Đặt lại trạng thái trò chơi
             }
             else if (mouseX >= highscoreButton.x && mouseX <= highscoreButton.x + highscoreButton.w &&
                      mouseY >= highscoreButton.y && mouseY <= highscoreButton.y + highscoreButton.h) {
                 gameState = HIGHSCORE;
             }
             else if (mouseX >= settingsButton.x && mouseX <= settingsButton.x + settingsButton.w &&
-                     mouseY >= settingsButton.y && mouseY <= settingsButton.y + settingsButton.h) {
+                     mouseY >= settingsButton.y && mouseY <= settingsButton.y + highscoreButton.h) {
                 gameState = SETTINGS;
             }
             else if (mouseX >= exitButton.x && mouseX <= exitButton.x + exitButton.w &&
@@ -187,9 +191,8 @@ void MainMenu::handleInput(SDL_Event& event, bool& running) {
 
         volumeKnob.x = newX;
 
-        float position = (float)(volumeKnob.x - volumeSlider.x) / (volumeSlider.w - volumeKnob.w);
-        volume = (int)(position * 128);
-        Mix_Volume(-1, volume);
+        volume = ((newX - volumeSlider.x) * 100) / volumeSlider.w;
+        Mix_Volume(-1, volume * 128 / 100);
         updateVolumeTexture();
     }
 }
@@ -226,8 +229,8 @@ void MainMenu::render() {
             SDL_RenderFillRect(renderer, &settingsButton);
             int w, h;
             SDL_QueryTexture(settingsButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {settingsButton.x + (highscoreButton.w - w) / 2, settingsButton.y + (settingsButton.h - h) / 2, w, h};
-            SDL_RenderCopy( renderer, settingsButtonTexture, NULL, &textRect);
+            SDL_Rect textRect = {settingsButton.x + (settingsButton.w - w) / 2, settingsButton.y + (settingsButton.h - h) / 2, w, h};
+            SDL_RenderCopy(renderer, settingsButtonTexture, NULL, &textRect);
         }
         if (exitButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
@@ -267,7 +270,7 @@ void MainMenu::render() {
             SDL_Rect titleRect = {400 - w / 2, 100, w, h};
             SDL_RenderCopy(renderer, settingsTitleTexture, NULL, &titleRect);
         }
-        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_RenderFillRect(renderer, &volumeSlider);
 
         SDL_SetRenderDrawColor(renderer, isDraggingKnob ? 255 : 200, isDraggingKnob ? 255 : 200, isDraggingKnob ? 0 : 255, 255);
@@ -276,7 +279,7 @@ void MainMenu::render() {
         if (volumeTexture) {
             int w, h;
             SDL_QueryTexture(volumeTexture, NULL, NULL, &w, &h);
-            SDL_Rect volumeRect = {400 - w / 2, volumeSlider.y - h - 20, w, h};
+            SDL_Rect volumeRect = {400 - w / 2, 390, w, h};
             SDL_RenderCopy(renderer, volumeTexture, NULL, &volumeRect);
         }
         if (backButtonTexture) {
