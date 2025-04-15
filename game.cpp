@@ -14,7 +14,7 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
       highscoreTexture(nullptr), pausedTexture(nullptr), 
       backToMenuTexture(nullptr), restartTexture(nullptr), 
       gameOverTextTexture(nullptr), volumeLabelTexture(nullptr),
-      giveUpTexture(nullptr), // Khởi tạo texture Give Up
+      giveUpTexture(nullptr),
       gameOver(false), paused(false), showWarning(false), 
       isFirstFastMissile(true), justStarted(false),
       warningStartTime(0), warningX(0), warningY(0), 
@@ -28,23 +28,20 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
       pauseButton{750, 10, 40, 40},
       backToMenuButton{300, 400, 200, 50},
       restartButton{300, 340, 200, 50},
-      giveUpButton{300, 460, 200, 50}, // Nút Give Up trong Pause
+      giveUpButton{300, 460, 200, 50},
       trajectory{400, 300, 60} {
     wavesUntilIncrease = 7 + (rand() % 6);
 
-    // Khởi tạo danh sách mạng sống
     for (int i = 0; i < 3; i++) {
         Life life = {20 + i * 30, 20, false};
         lives.push_back(life);
     }
 
-    // Khởi tạo thanh trượt âm lượng
     volumeSlider = {300, 420, 200, 10};
     volumeKnob = {300 + (volume * 200 / 100) - 5, 415, 10, 20};
     Mix_VolumeMusic(volume * 128 / 100);
-    sensitivity = menu->sensitivity; // Đồng bộ sensitivity
+    sensitivity = menu->sensitivity;
 
-    // Tải texture cho tàu vũ trụ
     SDL_Surface* spaceshipSurface = IMG_Load("images/mspaceship.png");
     if (!spaceshipSurface) {
         std::cerr << "IMG_Load failed for mspaceship.png: " << IMG_GetError() << std::endl;
@@ -57,7 +54,6 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
         exit(1);
     }
 
-    // Tải texture cho nút pause
     SDL_Surface* pauseButtonSurface = IMG_Load("images/pausebutton.png");
     if (!pauseButtonSurface) {
         std::cerr << "IMG_Load failed for pausebutton.png: " << IMG_GetError() << std::endl;
@@ -263,15 +259,15 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
 
         if (paused && mouseX >= giveUpButton.x && mouseX <= giveUpButton.x + giveUpButton.w &&
             mouseY >= giveUpButton.y && mouseY <= giveUpButton.y + giveUpButton.h) {
-            paused = false; // Đặt lại trạng thái paused để tắt màn hình Pause
-            totalPausedTime += SDL_GetTicks() - pauseStartTime; // Cập nhật thời gian tạm dừng
-            pauseStartTime = 0; // Đặt lại thời gian bắt đầu tạm dừng
+            paused = false;
+            totalPausedTime += SDL_GetTicks() - pauseStartTime;
+            pauseStartTime = 0;
             gameOver = true;
             menu.gameState = MainMenu::GAME_OVER;
             menu.saveHighscores(score);
             updateScoreTexture();
             updateHighscoreTexture();
-}
+        }
 
         if (gameOver) {
             if (mouseX >= backToMenuButton.x && mouseX <= backToMenuButton.x + backToMenuButton.w &&
@@ -327,9 +323,23 @@ void Game::update(float deltaTime) {
 
     if (!paused) {
         const Uint8* keys = SDL_GetKeyboardState(NULL);
-        float sensitivityFactor = 0.75f + (sensitivity / 100.0f) * 0.5f; // 0.75 đến 1.25
+        float sensitivityFactor = 0.75f + (sensitivity / 100.0f) * 0.5f;
         if (keys[SDL_SCANCODE_A]) arcStartAngle -= 2 * PI * deltaTime * sensitivityFactor;
         if (keys[SDL_SCANCODE_D]) arcStartAngle += 2 * PI * deltaTime * sensitivityFactor;
+
+        // Tạo SpaceShark ở wave 15, 30, 45, ...
+        if (waveCount >= 15 && waveCount % 15 == 0 && spaceSharks.empty()) {
+            SpaceShark ss;
+            ss.radius = 300.0f;
+            ss.angle = static_cast<float>(rand()) / RAND_MAX * 2 * PI;
+            ss.angularSpeed = 2.0f;
+            ss.x = 400 + ss.radius * cos(ss.angle);
+            ss.y = 300 + ss.radius * sin(ss.angle);
+            ss.spawnTime = currentTime;
+            ss.lastBulletTime = currentTime;
+            ss.active = true;
+            spaceSharks.push_back(ss);
+        }
 
         // Tạo tên lửa nhanh
         if (waveCount >= 9 && (waveCount - 9) % 3 == 0 && fastMissiles.empty() && !showWarning) {
@@ -404,6 +414,88 @@ void Game::update(float deltaTime) {
             justStarted = false;
         }
 
+        // Cập nhật SpaceShark
+        for (auto& ss : spaceSharks) {
+            if (ss.active) {
+                ss.angle += ss.angularSpeed * deltaTime;
+                ss.radius -= 20.0f * deltaTime;
+                if (ss.radius < 60.0f) ss.radius = 60.0f;
+                ss.x = 400 + ss.radius * cos(ss.angle);
+                ss.y = 300 + ss.radius * sin(ss.angle);
+
+                if (currentTime - ss.lastBulletTime >= 5000) {
+                    SharkBullet sb;
+                    sb.x = ss.x;
+                    sb.y = ss.y;
+                    float distX = 400 - sb.x, distY = 300 - sb.y;
+                    float distance = sqrt(distX * distX + distY * distY);
+                    if (distance < 1e-6) distance = 1.0f;
+                    float bulletSpeed = defaultMissileSpeed * 0.5f;
+                    sb.dx = (distX / distance) * bulletSpeed;
+                    sb.dy = (distY / distance) * bulletSpeed;
+                    sb.active = true;
+                    sharkBullets.push_back(sb);
+                    ss.lastBulletTime = currentTime;
+                }
+
+                if (currentTime - ss.spawnTime >= 15000 || CheckCollisionWithChitbox(ss)) {
+                    ss.active = false;
+                    for (auto& life : lives) {
+                        if (!life.isRed) {
+                            life.isRed = true;
+                            break;
+                        }
+                    }
+                    bool allRed = true;
+                    for (auto& life : lives) {
+                        if (!life.isRed) { allRed = false; break; }
+                    }
+                    if (allRed) {
+                        gameOver = true;
+                        menu->saveHighscores(score);
+                        updateScoreTexture();
+                        updateHighscoreTexture();
+                    }
+                }
+                else if (CheckCollisionWithArc(ss)) {
+                    ss.active = false;
+                    score += 5;
+                    updateScoreTexture();
+                }
+            }
+        }
+
+        // Cập nhật SharkBullet
+        for (auto& sb : sharkBullets) {
+            if (sb.active) {
+                sb.x += sb.dx * deltaTime;
+                sb.y += sb.dy * deltaTime;
+                if (CheckCollisionWithArc(sb)) {
+                    sb.active = false;
+                }
+                else if (CheckCollisionWithChitbox(sb)) {
+                    sb.active = false;
+                    for (auto& life : lives) {
+                        if (!life.isRed) {
+                            life.isRed = true;
+                            break;
+                        }
+                    }
+                    bool allRed = true;
+                    for (auto& life : lives) {
+                        if (!life.isRed) { allRed = false; break; }
+                    }
+                    if (allRed) {
+                        gameOver = true;
+                        menu->saveHighscores(score);
+                        updateScoreTexture();
+                        updateHighscoreTexture();
+                    }
+                }
+            }
+        }
+
+        // Cập nhật tên lửa thường
         for (auto& t : targets) {
             if (t.active) {
                 t.x += t.dx * deltaTime;
@@ -435,6 +527,7 @@ void Game::update(float deltaTime) {
             }
         }
 
+        // Cập nhật tên lửa nhanh
         for (auto& fm : fastMissiles) {
             if (fm.active) {
                 fm.x += fm.dx * deltaTime;
@@ -474,6 +567,14 @@ void Game::update(float deltaTime) {
             std::remove_if(fastMissiles.begin(), fastMissiles.end(), [](Target& fm) { return !fm.active; }),
             fastMissiles.end()
         );
+        spaceSharks.erase(
+            std::remove_if(spaceSharks.begin(), spaceSharks.end(), [](SpaceShark& ss) { return !ss.active; }),
+            spaceSharks.end()
+        );
+        sharkBullets.erase(
+            std::remove_if(sharkBullets.begin(), sharkBullets.end(), [](SharkBullet& sb) { return !sb.active; }),
+            sharkBullets.end()
+        );
     }
 }
 
@@ -501,6 +602,12 @@ void Game::render() {
         }
         for (auto& fm : fastMissiles) {
             enemy->renderFastMissile(fm);
+        }
+        for (auto& ss : spaceSharks) {
+            enemy->renderSpaceShark(ss);
+        }
+        for (auto& sb : sharkBullets) {
+            enemy->renderSharkBullet(sb);
         }
         if (showWarning) {
             enemy->renderWarning(warningX, warningY, warningStartTime, startTime, totalPausedTime);
@@ -546,7 +653,7 @@ void Game::render() {
         SDL_Rect backToMenuTextRect = {backToMenuButton.x + (backToMenuButton.w - w) / 2, backToMenuButton.y + (backToMenuButton.h - h) / 2, w, h};
         SDL_RenderCopy(renderer, backToMenuTexture, NULL, &backToMenuTextRect);
     }
-    else if (paused) { // Thêm else để tránh vẽ Pause khi gameOver = true
+    else if (paused) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 128);
         SDL_Rect overlay = {0, 0, 800, 600};
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -607,6 +714,8 @@ void Game::reset() {
     warningY = 0;
     targets.clear();
     fastMissiles.clear();
+    spaceSharks.clear();
+    sharkBullets.clear();
     for (auto& life : lives) {
         life.isRed = false;
     }
@@ -656,6 +765,36 @@ bool Game::CheckCollisionWithArc(Target& t) {
 bool Game::CheckCollisionWithChitbox(Target& t) {
     return (t.x >= chitbox.x && t.x <= chitbox.x + chitbox.w &&
             t.y >= chitbox.y && t.y <= chitbox.y + chitbox.h);
+}
+
+bool Game::CheckCollisionWithArc(SpaceShark& ss) {
+    for (double angle = arcStartAngle; angle <= arcStartAngle + 2 * PI / 3; angle += 0.01) {
+        int arcX = trajectory.x + trajectory.r * cos(angle);
+        int arcY = trajectory.y + trajectory.r * sin(angle);
+        int dist = (ss.x - arcX) * (ss.x - arcX) + (ss.y - arcY) * (ss.y - arcY);
+        if (dist < 625) return true;
+    }
+    return false;
+}
+
+bool Game::CheckCollisionWithChitbox(SpaceShark& ss) {
+    return (ss.x >= chitbox.x && ss.x <= chitbox.x + chitbox.w &&
+            ss.y >= chitbox.y && ss.y <= chitbox.y + chitbox.h);
+}
+
+bool Game::CheckCollisionWithArc(SharkBullet& sb) {
+    for (double angle = arcStartAngle; angle <= arcStartAngle + 2 * PI / 3; angle += 0.01) {
+        int arcX = trajectory.x + trajectory.r * cos(angle);
+        int arcY = trajectory.y + trajectory.r * sin(angle);
+        int dist = (sb.x - arcX) * (sb.x - arcX) + (sb.y - arcY) * (sb.y - arcY);
+        if (dist < 100) return true;
+    }
+    return false;
+}
+
+bool Game::CheckCollisionWithChitbox(SharkBullet& sb) {
+    return (sb.x >= chitbox.x && sb.x <= chitbox.x + chitbox.w &&
+            sb.y >= chitbox.y && sb.y <= chitbox.y + chitbox.h);
 }
 
 void Game::DrawCircle(SDL_Renderer* renderer, Circle& c) {

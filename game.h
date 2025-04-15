@@ -24,7 +24,7 @@ private:
     SDL_Texture* restartTexture;
     SDL_Texture* gameOverTextTexture;
     SDL_Texture* volumeLabelTexture;
-    SDL_Texture* giveUpTexture; // Texture cho nút Give Up
+    SDL_Texture* giveUpTexture;
     bool gameOver;
     bool paused;
     bool showWarning;
@@ -47,10 +47,10 @@ private:
     float defaultMissileSpeed;
     float maxMissileSpeed;
     int volume;
-    int sensitivity; // Độ nhạy cho phím A/D
+    int sensitivity;
     SDL_Rect volumeSlider;
     SDL_Rect volumeKnob;
-    SDL_Rect giveUpButton; // Nút Give Up trong Pause
+    SDL_Rect giveUpButton;
     bool isDraggingVolume;
 
     struct Circle {
@@ -68,6 +68,8 @@ private:
     SDL_Rect restartButton;
     std::vector<Target> targets;
     std::vector<Target> fastMissiles;
+    std::vector<SpaceShark> spaceSharks;
+    std::vector<SharkBullet> sharkBullets;
     std::vector<Life> lives;
 
     void initTextures();
@@ -80,6 +82,10 @@ private:
     void DrawArc(SDL_Renderer* renderer, Circle& c, double startAngle, double arcAngle);
     bool CheckCollisionWithArc(Target& t);
     bool CheckCollisionWithChitbox(Target& t);
+    bool CheckCollisionWithArc(SpaceShark& ss);
+    bool CheckCollisionWithChitbox(SpaceShark& ss);
+    bool CheckCollisionWithArc(SharkBullet& sb);
+    bool CheckCollisionWithChitbox(SharkBullet& sb);
 
 public:
     Game(SDL_Renderer* r, Enemy* e, MainMenu* m);

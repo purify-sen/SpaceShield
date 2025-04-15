@@ -7,7 +7,8 @@
 #define PI M_PI
 
 Enemy::Enemy(SDL_Renderer* r, SDL_Texture* mt) 
-    : renderer(r), missileTexture(mt), fastMissileTexture(nullptr), warningTexture(nullptr) {
+    : renderer(r), missileTexture(mt), fastMissileTexture(nullptr), warningTexture(nullptr),
+      spaceSharkTexture(nullptr), sharkBulletTexture(nullptr) {
     SDL_Surface* fastMissileSurface = IMG_Load("images/fmissile.png");
     if (!fastMissileSurface) {
         std::cerr << "IMG_Load failed for fmissile.png: " << IMG_GetError() << std::endl;
@@ -31,11 +32,37 @@ Enemy::Enemy(SDL_Renderer* r, SDL_Texture* mt)
         std::cerr << "SDL_CreateTextureFromSurface failed for fwarning.png: " << SDL_GetError() << std::endl;
         exit(1);
     }
+
+    SDL_Surface* spaceSharkSurface = IMG_Load("images/spaceshark.png");
+    if (!spaceSharkSurface) {
+        std::cerr << "IMG_Load failed for spaceshark.png: " << IMG_GetError() << std::endl;
+        exit(1);
+    }
+    spaceSharkTexture = SDL_CreateTextureFromSurface(renderer, spaceSharkSurface);
+    SDL_FreeSurface(spaceSharkSurface);
+    if (!spaceSharkTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for spaceshark.png: " << SDL_GetError() << std::endl;
+        exit(1);
+    }
+
+    SDL_Surface* sharkBulletSurface = IMG_Load("images/sharkbullet.png");
+    if (!sharkBulletSurface) {
+        std::cerr << "IMG_Load failed for sharkbullet.png: " << IMG_GetError() << std::endl;
+        exit(1);
+    }
+    sharkBulletTexture = SDL_CreateTextureFromSurface(renderer, sharkBulletSurface);
+    SDL_FreeSurface(sharkBulletSurface);
+    if (!sharkBulletTexture) {
+        std::cerr << "SDL_CreateTextureFromSurface failed for sharkbullet.png: " << SDL_GetError() << std::endl;
+        exit(1);
+    }
 }
 
 Enemy::~Enemy() {
     if (fastMissileTexture) SDL_DestroyTexture(fastMissileTexture);
     if (warningTexture) SDL_DestroyTexture(warningTexture);
+    if (spaceSharkTexture) SDL_DestroyTexture(spaceSharkTexture);
+    if (sharkBulletTexture) SDL_DestroyTexture(sharkBulletTexture);
 }
 
 void Enemy::renderTarget(Target& t) {
@@ -66,5 +93,24 @@ void Enemy::renderWarning(float warningX, float warningY, Uint32 warningStartTim
         SDL_RenderCopy(renderer, warningTexture, NULL, &warningRect);
 
         SDL_SetTextureAlphaMod(warningTexture, 255);
+    }
+}
+
+void Enemy::renderSpaceShark(SpaceShark& ss) {
+    if (ss.active && spaceSharkTexture) {
+        // Góc xoay dựa trên hướng di chuyển xoắn ốc
+        double angle = ss.angle * 180.0 / PI;
+        SDL_Rect sharkRect = {(int)ss.x - 25, (int)ss.y - 15, 50, 30};
+        SDL_Point center = {25, 15};
+        SDL_RenderCopyEx(renderer, spaceSharkTexture, NULL, &sharkRect, angle, &center, SDL_FLIP_NONE);
+    }
+}
+
+void Enemy::renderSharkBullet(SharkBullet& sb) {
+    if (sb.active && sharkBulletTexture) {
+        double angle = atan2(sb.dy, sb.dx) * 180.0 / PI;
+        SDL_Rect bulletRect = {(int)sb.x - 10, (int)sb.y - 5, 20, 10};
+        SDL_Point center = {10, 5};
+        SDL_RenderCopyEx(renderer, sharkBulletTexture, NULL, &bulletRect, angle, &center, SDL_FLIP_NONE);
     }
 }
