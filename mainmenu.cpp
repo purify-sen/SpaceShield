@@ -58,6 +58,7 @@ MainMenu::MainMenu(SDL_Renderer* r, TTF_Font* f)
 
     Mix_Volume(-1, volume * 128 / 100);
     loadHighscores();
+    loadSettings();
     updateHighscoreListTexture();
     updateVolumeTexture();
     updateSensitivityTexture();
@@ -105,6 +106,41 @@ void MainMenu::saveHighscores(int score) {
         for (int s : highscores) {
             file << s << "\n";
         }
+        file << "Volume: " << volume << "\n";
+        file << "Sensitivity: " << sensitivity << "\n";
+        file.close();
+    }
+}
+
+void MainMenu::loadSettings() {
+    std::ifstream file(playerDataFile);
+    if (file.is_open()) {
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.find("Volume: ") == 0) {
+                volume = std::stoi(line.substr(8));
+                volumeKnob.x = volumeSlider.x + (volume * volumeSlider.w / 100) - volumeKnob.w / 2;
+                Mix_Volume(-1, volume * 128 / 100);
+            }
+            else if (line.find("Sensitivity: ") == 0) {
+                sensitivity = std::stoi(line.substr(13));
+                sensitivityKnob.x = sensitivitySlider.x + (sensitivity * sensitivitySlider.w / 100) - sensitivityKnob.w / 2;
+            }
+        }
+        file.close();
+    }
+}
+
+void MainMenu::saveSettings() {
+    std::filesystem::create_directories("playerdata");
+
+    std::ofstream file(playerDataFile);
+    if (file.is_open()) {
+        for (int s : highscores) {
+            file << s << "\n";
+        }
+        file << "Volume: " << volume << "\n";
+        file << "Sensitivity: " << sensitivity << "\n";
         file.close();
     }
 }
@@ -191,6 +227,7 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
         else if (gameState == HIGHSCORE || gameState == SETTINGS) {
             if (mouseX >= backButton.x && mouseX <= backButton.x + backButton.w &&
                 mouseY >= backButton.y && mouseY <= backButton.y + backButton.h) {
+                saveSettings();
                 gameState = MENU;
                 isDraggingKnob = false;
                 isDraggingSensitivityKnob = false;
@@ -209,6 +246,9 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
         }
     }
     else if (event.type == SDL_MOUSEBUTTONUP) {
+        if (isDraggingKnob || isDraggingSensitivityKnob) {
+            saveSettings();
+        }
         isDraggingKnob = false;
         isDraggingSensitivityKnob = false;
     }
@@ -216,13 +256,11 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
 
-        int newX = mouseX - volumeKnob.w / 2;
+        int newX = mouseX;
         if (newX < volumeSlider.x) newX = volumeSlider.x;
-        if (newX > volumeSlider.x + volumeSlider.w - volumeKnob.w) {
-            newX = volumeSlider.x + volumeSlider.w - volumeKnob.w;
-        }
+        if (newX > volumeSlider.x + volumeSlider.w) newX = volumeSlider.x + volumeSlider.w;
 
-        volumeKnob.x = newX;
+        volumeKnob.x = newX - volumeKnob.w / 2;
 
         volume = ((newX - volumeSlider.x) * 100) / volumeSlider.w;
         Mix_Volume(-1, volume * 128 / 100);
@@ -233,13 +271,11 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
 
-        int newX = mouseX - sensitivityKnob.w / 2;
+        int newX = mouseX;
         if (newX < sensitivitySlider.x) newX = sensitivitySlider.x;
-        if (newX > sensitivitySlider.x + sensitivitySlider.w - sensitivityKnob.w) {
-            newX = sensitivitySlider.x + sensitivitySlider.w - sensitivityKnob.w;
-        }
+        if (newX > sensitivitySlider.x + sensitivitySlider.w) newX = sensitivitySlider.x + sensitivitySlider.w;
 
-        sensitivityKnob.x = newX;
+        sensitivityKnob.x = newX - sensitivityKnob.w / 2;
 
         sensitivity = ((newX - sensitivitySlider.x) * 100) / sensitivitySlider.w;
         updateSensitivityTexture();
@@ -271,7 +307,7 @@ void MainMenu::render() {
             SDL_RenderFillRect(renderer, &highscoreButton);
             int w, h;
             SDL_QueryTexture(highscoreButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {highscoreButton.x + (highscoreButton.w - w) / 2, highscoreButton.y + (highscoreButton.h - h) / 2, w, h};
+            SDL_Rect textRect = {highscoreButton.x + (highscoreButton.w - w) / 2, highscoreButton.y + (playButton.h - h) / 2, w, h};
             SDL_RenderCopy(renderer, highscoreButtonTexture, NULL, &textRect);
         }
         if (settingsButtonTexture) {
@@ -279,7 +315,7 @@ void MainMenu::render() {
             SDL_RenderFillRect(renderer, &settingsButton);
             int w, h;
             SDL_QueryTexture(settingsButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {settingsButton.x + (settingsButton.w - w) / 2, settingsButton.y + (settingsButton.h - h) / 2, w, h};
+            SDL_Rect textRect = {settingsButton.x + (settingsButton.w - w) / 2, settingsButton.y + (playButton.h - h) / 2, w, h};
             SDL_RenderCopy(renderer, settingsButtonTexture, NULL, &textRect);
         }
         if (exitButtonTexture) {
@@ -287,7 +323,7 @@ void MainMenu::render() {
             SDL_RenderFillRect(renderer, &exitButton);
             int w, h;
             SDL_QueryTexture(exitButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {exitButton.x + (exitButton.w - w) / 2, exitButton.y + (exitButton.h - h) / 2, w, h};
+            SDL_Rect textRect = {exitButton.x + (exitButton.w - w) / 2, exitButton.y + (playButton.h - h) / 2, w, h};
             SDL_RenderCopy(renderer, exitButtonTexture, NULL, &textRect);
         }
     }
@@ -329,7 +365,7 @@ void MainMenu::render() {
         if (volumeTexture) {
             int w, h;
             SDL_QueryTexture(volumeTexture, NULL, NULL, &w, &h);
-            SDL_Rect volumeRect = {150, 360, w, h}; // Dịch sang trái, x=150
+            SDL_Rect volumeRect = {volumeSlider.x, volumeSlider.y - 40, w, h};
             SDL_RenderCopy(renderer, volumeTexture, NULL, &volumeRect);
         }
 
@@ -342,7 +378,7 @@ void MainMenu::render() {
         if (sensitivityTexture) {
             int w, h;
             SDL_QueryTexture(sensitivityTexture, NULL, NULL, &w, &h);
-            SDL_Rect sensitivityRect = {150, 440, w, h}; // Dịch sang trái, x=150
+            SDL_Rect sensitivityRect = {sensitivitySlider.x, sensitivitySlider.y - 40, w, h};
             SDL_RenderCopy(renderer, sensitivityTexture, NULL, &sensitivityRect);
         }
 

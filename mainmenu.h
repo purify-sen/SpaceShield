@@ -49,6 +49,8 @@ public:
     void updateHighscoreListTexture();
     void updateVolumeTexture();
     void updateSensitivityTexture();
+    void saveSettings();
+    void loadSettings();
 };
 
 #endif
