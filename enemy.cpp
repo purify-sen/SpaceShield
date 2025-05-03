@@ -1,124 +1,147 @@
 #include "enemy.h"
+#include "config.h" // Bao gồm config.h
 #include <cmath>
 #include <SDL2/SDL_image.h>
 #include <algorithm>
 #include <iostream>
 
-#define PI M_PI
-
-Enemy::Enemy(SDL_Renderer* r, SDL_Texture* mt) 
+// Hàm khởi tạo Enemy: Nạp các texture cần thiết
+Enemy::Enemy(SDL_Renderer* r, SDL_Texture* mt)
     : renderer(r), missileTexture(mt), fastMissileTexture(nullptr), warningTexture(nullptr),
       spaceSharkTexture(nullptr), sharkBulletTexture(nullptr) {
-    SDL_Surface* fastMissileSurface = IMG_Load("images/fmissile.png");
+
+    // Nạp texture tên lửa nhanh
+    SDL_Surface* fastMissileSurface = IMG_Load(IMG_FAST_MISSILE.c_str());
     if (!fastMissileSurface) {
-        std::cerr << "IMG_Load failed for fmissile.png: " << IMG_GetError() << std::endl;
+        std::cerr << "IMG_Load failed for " << IMG_FAST_MISSILE << ": " << IMG_GetError() << std::endl;
+        // Cân nhắc xử lý lỗi tốt hơn thay vì exit()
         exit(1);
     }
     fastMissileTexture = SDL_CreateTextureFromSurface(renderer, fastMissileSurface);
     SDL_FreeSurface(fastMissileSurface);
     if (!fastMissileTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for fmissile.png: " << SDL_GetError() << std::endl;
+        std::cerr << "SDL_CreateTextureFromSurface failed for " << IMG_FAST_MISSILE << ": " << SDL_GetError() << std::endl;
         exit(1);
     }
 
-    SDL_Surface* warningSurface = IMG_Load("images/fwarning.png");
+    // Nạp texture cảnh báo
+    SDL_Surface* warningSurface = IMG_Load(IMG_WARNING.c_str());
     if (!warningSurface) {
-        std::cerr << "IMG_Load failed for fwarning.png: " << IMG_GetError() << std::endl;
+        std::cerr << "IMG_Load failed for " << IMG_WARNING << ": " << IMG_GetError() << std::endl;
         exit(1);
     }
     warningTexture = SDL_CreateTextureFromSurface(renderer, warningSurface);
     SDL_FreeSurface(warningSurface);
     if (!warningTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for fwarning.png: " << SDL_GetError() << std::endl;
+        std::cerr << "SDL_CreateTextureFromSurface failed for " << IMG_WARNING << ": " << SDL_GetError() << std::endl;
         exit(1);
     }
 
-    SDL_Surface* spaceSharkSurface = IMG_Load("images/spaceshark.png");
+    // Nạp texture cá mập không gian
+    SDL_Surface* spaceSharkSurface = IMG_Load(IMG_SPACE_SHARK.c_str());
     if (!spaceSharkSurface) {
-        std::cerr << "IMG_Load failed for spaceshark.png: " << IMG_GetError() << std::endl;
+        std::cerr << "IMG_Load failed for " << IMG_SPACE_SHARK << ": " << IMG_GetError() << std::endl;
         exit(1);
     }
     spaceSharkTexture = SDL_CreateTextureFromSurface(renderer, spaceSharkSurface);
     SDL_FreeSurface(spaceSharkSurface);
     if (!spaceSharkTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for spaceshark.png: " << SDL_GetError() << std::endl;
+        std::cerr << "SDL_CreateTextureFromSurface failed for " << IMG_SPACE_SHARK << ": " << SDL_GetError() << std::endl;
         exit(1);
     }
 
-    SDL_Surface* sharkBulletSurface = IMG_Load("images/sharkbullet.png");
+    // Nạp texture đạn cá mập
+    SDL_Surface* sharkBulletSurface = IMG_Load(IMG_SHARK_BULLET.c_str());
     if (!sharkBulletSurface) {
-        std::cerr << "IMG_Load failed for sharkbullet.png: " << IMG_GetError() << std::endl;
+        std::cerr << "IMG_Load failed for " << IMG_SHARK_BULLET << ": " << IMG_GetError() << std::endl;
         exit(1);
     }
     sharkBulletTexture = SDL_CreateTextureFromSurface(renderer, sharkBulletSurface);
     SDL_FreeSurface(sharkBulletSurface);
     if (!sharkBulletTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for sharkbullet.png: " << SDL_GetError() << std::endl;
+        std::cerr << "SDL_CreateTextureFromSurface failed for " << IMG_SHARK_BULLET << ": " << SDL_GetError() << std::endl;
         exit(1);
     }
 }
 
+// Hàm hủy Enemy: Giải phóng các texture đã nạp
 Enemy::~Enemy() {
+    // missileTexture được quản lý bên ngoài (trong main.cpp), không hủy ở đây
     if (fastMissileTexture) SDL_DestroyTexture(fastMissileTexture);
     if (warningTexture) SDL_DestroyTexture(warningTexture);
     if (spaceSharkTexture) SDL_DestroyTexture(spaceSharkTexture);
     if (sharkBulletTexture) SDL_DestroyTexture(sharkBulletTexture);
 }
 
-void Enemy::renderTarget(Target& t) {
+// Render tên lửa thường
+void Enemy::renderTarget(const Target& t) {
     if (t.active && missileTexture) {
+        // Tính góc dựa trên vector vận tốc
         double angle = atan2(t.dy, t.dx) * 180.0 / PI;
-        SDL_Rect missileRect = {(int)t.x - 15, (int)t.y - 30, 45, 30};
-        SDL_Point center = {15, 30};
-        SDL_RenderCopyEx(renderer, missileTexture, NULL, &missileRect, angle, &center, SDL_FLIP_NONE);
+        // Xác định hình chữ nhật và tâm xoay
+        SDL_Rect missileRect = {(int)t.x - MISSILE_CENTER.x, (int)t.y - MISSILE_CENTER.y, MISSILE_WIDTH, MISSILE_HEIGHT};
+        SDL_RenderCopyEx(renderer, missileTexture, NULL, &missileRect, angle, &MISSILE_CENTER, SDL_FLIP_NONE);
     }
 }
 
-void Enemy::renderFastMissile(Target& fm) {
+// Render tên lửa nhanh
+void Enemy::renderFastMissile(const Target& fm) {
     if (fm.active && fastMissileTexture) {
+        // Tính góc dựa trên vector vận tốc
         double angle = atan2(fm.dy, fm.dx) * 180.0 / PI;
-        SDL_Rect missileRect = {(int)fm.x - 15, (int)fm.y - 30, 45, 30};
-        SDL_Point center = {15, 30};
-        SDL_RenderCopyEx(renderer, fastMissileTexture, NULL, &missileRect, angle, &center, SDL_FLIP_NONE);
+        // Xác định hình chữ nhật và tâm xoay
+        SDL_Rect missileRect = {(int)fm.x - FAST_MISSILE_CENTER.x, (int)fm.y - FAST_MISSILE_CENTER.y, FAST_MISSILE_WIDTH, FAST_MISSILE_HEIGHT};
+        SDL_RenderCopyEx(renderer, fastMissileTexture, NULL, &missileRect, angle, &FAST_MISSILE_CENTER, SDL_FLIP_NONE);
     }
 }
 
-void Enemy::renderWarning(float warningX, float warningY, Uint32 warningStartTime, Uint32 startTime, Uint32 totalPausedTime) {
+// Render cảnh báo tên lửa nhanh
+void Enemy::renderWarning(float warningX, float warningY, Uint32 warningStartTime, Uint32 gameStartTime, Uint32 totalPausedTime) {
     if (warningTexture) {
-        Uint32 elapsedTime = SDL_GetTicks() - startTime - totalPausedTime - warningStartTime;
-        float alpha = 152.5f + 102.5f * sin(2 * PI * 2 * elapsedTime / 1000.0f);
+        // Tính thời gian đã trôi qua kể từ khi cảnh báo bắt đầu (có trừ thời gian pause)
+        Uint32 elapsedTime = SDL_GetTicks() - gameStartTime - totalPausedTime - warningStartTime;
+        // Tính alpha nhấp nháy dựa trên hàm sin
+        float alpha = WARNING_ALPHA_MIN + WARNING_ALPHA_RANGE * sin(WARNING_ALPHA_FREQ * elapsedTime);
+        // Đảm bảo alpha trong khoảng 0-255
+        alpha = std::max(0.0f, std::min(255.0f, alpha));
         SDL_SetTextureAlphaMod(warningTexture, static_cast<Uint8>(alpha));
 
-        SDL_Rect warningRect = {(int)warningX - 15, (int)warningY - 22, 30, 45};
+        // Xác định vị trí render cảnh báo
+        SDL_Rect warningRect = {(int)warningX - WARNING_ICON_OFFSET_X, (int)warningY - WARNING_ICON_OFFSET_Y, WARNING_ICON_WIDTH, WARNING_ICON_HEIGHT};
         SDL_RenderCopy(renderer, warningTexture, NULL, &warningRect);
 
+        // Khôi phục alpha mặc định cho texture
         SDL_SetTextureAlphaMod(warningTexture, 255);
     }
 }
 
-void Enemy::renderSpaceShark(SpaceShark& ss) {
+// Render cá mập không gian
+void Enemy::renderSpaceShark(const SpaceShark& ss) {
     if (ss.active && spaceSharkTexture) {
-        // Tính vector vận tốc
-        // dx/dt = -radius * sin(angle) * angularSpeed - cos(angle) * dr/dt
-        // dy/dt = radius * cos(angle) * angularSpeed - sin(angle) * dr/dt
-        // dr/dt = -20.0f (từ Game::update)
-        float dr_dt = -20.0f;
-        float dx = -ss.radius * sin(ss.angle) * ss.angularSpeed - cos(ss.angle) * dr_dt;
-        float dy = ss.radius * cos(ss.angle) * ss.angularSpeed - sin(ss.angle) * dr_dt;
+        // Tính toán vector vận tốc gần đúng để xác định góc xoay
+        // (Đạo hàm của x = centerX + r*cos(a), y = centerY + r*sin(a) theo thời gian t)
+        // dx/dt = dr/dt * cos(a) - r * sin(a) * da/dt
+        // dy/dt = dr/dt * sin(a) + r * cos(a) * da/dt
+        // Với dr/dt = SHARK_SPIRAL_SPEED và da/dt = ss.angularSpeed
+        float dr_dt = SHARK_SPIRAL_SPEED;
+        float dx = dr_dt * cos(ss.angle) - ss.radius * sin(ss.angle) * ss.angularSpeed;
+        float dy = dr_dt * sin(ss.angle) + ss.radius * cos(ss.angle) * ss.angularSpeed;
 
         // Tính góc xoay từ vector vận tốc
         double angle = atan2(dy, dx) * 180.0 / PI;
-        SDL_Rect sharkRect = {(int)ss.x - 25, (int)ss.y - 15, 50, 30};
-        SDL_Point center = {25, 15};
-        SDL_RenderCopyEx(renderer, spaceSharkTexture, NULL, &sharkRect, angle, &center, SDL_FLIP_NONE);
+        // Xác định hình chữ nhật và tâm xoay
+        SDL_Rect sharkRect = {(int)ss.x - SHARK_CENTER.x, (int)ss.y - SHARK_CENTER.y, SHARK_WIDTH, SHARK_HEIGHT};
+        SDL_RenderCopyEx(renderer, spaceSharkTexture, NULL, &sharkRect, angle, &SHARK_CENTER, SDL_FLIP_NONE);
     }
 }
 
-void Enemy::renderSharkBullet(SharkBullet& sb) {
+// Render đạn cá mập
+void Enemy::renderSharkBullet(const SharkBullet& sb) {
     if (sb.active && sharkBulletTexture) {
+        // Tính góc dựa trên vector vận tốc
         double angle = atan2(sb.dy, sb.dx) * 180.0 / PI;
-        SDL_Rect bulletRect = {(int)sb.x - 10, (int)sb.y - 5, 20, 10};
-        SDL_Point center = {10, 5};
-        SDL_RenderCopyEx(renderer, sharkBulletTexture, NULL, &bulletRect, angle, &center, SDL_FLIP_NONE);
+        // Xác định hình chữ nhật và tâm xoay
+        SDL_Rect bulletRect = {(int)sb.x - SHARK_BULLET_CENTER.x, (int)sb.y - SHARK_BULLET_CENTER.y, SHARK_BULLET_WIDTH, SHARK_BULLET_HEIGHT};
+        SDL_RenderCopyEx(renderer, sharkBulletTexture, NULL, &bulletRect, angle, &SHARK_BULLET_CENTER, SDL_FLIP_NONE);
     }
 }
