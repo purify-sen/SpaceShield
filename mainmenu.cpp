@@ -81,13 +81,18 @@ MainMenu::~MainMenu() {
 void MainMenu::loadHighscores() {
     std::ifstream file(playerDataFile);
     highscores.clear();
-    if (file.is_open()) {
-        int score;
-        while (file >> score && highscores.size() < 5) {
-            highscores.push_back(score);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open " << playerDataFile << " for reading" << std::endl;
+        while (highscores.size() < 5) {
+            highscores.push_back(0);
         }
-        file.close();
+        return;
     }
+    int score;
+    while (file >> score && highscores.size() < 5) {
+        highscores.push_back(score);
+    }
+    file.close();
     while (highscores.size() < 5) {
         highscores.push_back(0);
     }
@@ -102,14 +107,16 @@ void MainMenu::saveHighscores(int score) {
     if (highscores.size() > 5) highscores.resize(5);
 
     std::ofstream file(playerDataFile);
-    if (file.is_open()) {
-        for (int s : highscores) {
-            file << s << "\n";
-        }
-        file << "Volume: " << volume << "\n";
-        file << "Sensitivity: " << sensitivity << "\n";
-        file.close();
+    if (!file.is_open()) {
+        std::cerr << "Failed to open " << playerDataFile << " for writing" << std::endl;
+        return;
     }
+    for (int s : highscores) {
+        file << s << "\n";
+    }
+    file << "Volume: " << volume << "\n";
+    file << "Sensitivity: " << sensitivity << "\n";
+    file.close();
 }
 
 void MainMenu::loadSettings() {
@@ -265,7 +272,7 @@ void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
         volume = ((newX - volumeSlider.x) * 100) / volumeSlider.w;
         Mix_Volume(-1, volume * 128 / 100);
         updateVolumeTexture();
-        game.setVolume(volume);
+        game.setVolume(volume); // Đồng bộ volume với Game
     }
     else if (event.type == SDL_MOUSEMOTION && isDraggingSensitivityKnob) {
         int mouseX, mouseY;
@@ -287,6 +294,15 @@ void MainMenu::render() {
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
+    auto renderTexture = [&](SDL_Texture* texture, SDL_Rect& rect) {
+        if (texture) {
+            int w, h;
+            SDL_QueryTexture(texture, NULL, NULL, &w, &h);
+            SDL_Rect textRect = {rect.x + (rect.w - w) / 2, rect.y + (rect.h - h) / 2, w, h};
+            SDL_RenderCopy(renderer, texture, NULL, &textRect);
+        }
+    };
+
     if (gameState == MENU) {
         if (titleTexture) {
             int w, h;
@@ -297,34 +313,22 @@ void MainMenu::render() {
         if (playButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             SDL_RenderFillRect(renderer, &playButton);
-            int w, h;
-            SDL_QueryTexture(playButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {playButton.x + (playButton.w - w) / 2, playButton.y + (playButton.h - h) / 2, w, h};
-            SDL_RenderCopy(renderer, playButtonTexture, NULL, &textRect);
+            renderTexture(playButtonTexture, playButton);
         }
         if (highscoreButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             SDL_RenderFillRect(renderer, &highscoreButton);
-            int w, h;
-            SDL_QueryTexture(highscoreButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {highscoreButton.x + (highscoreButton.w - w) / 2, highscoreButton.y + (playButton.h - h) / 2, w, h};
-            SDL_RenderCopy(renderer, highscoreButtonTexture, NULL, &textRect);
+            renderTexture(highscoreButtonTexture, highscoreButton);
         }
         if (settingsButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             SDL_RenderFillRect(renderer, &settingsButton);
-            int w, h;
-            SDL_QueryTexture(settingsButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {settingsButton.x + (settingsButton.w - w) / 2, settingsButton.y + (playButton.h - h) / 2, w, h};
-            SDL_RenderCopy(renderer, settingsButtonTexture, NULL, &textRect);
+            renderTexture(settingsButtonTexture, settingsButton);
         }
         if (exitButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             SDL_RenderFillRect(renderer, &exitButton);
-            int w, h;
-            SDL_QueryTexture(exitButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {exitButton.x + (exitButton.w - w) / 2, exitButton.y + (playButton.h - h) / 2, w, h};
-            SDL_RenderCopy(renderer, exitButtonTexture, NULL, &textRect);
+            renderTexture(exitButtonTexture, exitButton);
         }
     }
     else if (gameState == HIGHSCORE) {
@@ -343,10 +347,7 @@ void MainMenu::render() {
         if (backButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             SDL_RenderFillRect(renderer, &backButton);
-            int w, h;
-            SDL_QueryTexture(backButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {backButton.x + (backButton.w - w) / 2, backButton.y + (backButton.h - h) / 2, w, h};
-            SDL_RenderCopy(renderer, backButtonTexture, NULL, &textRect);
+            renderTexture(backButtonTexture, backButton);
         }
     }
     else if (gameState == SETTINGS) {
@@ -385,10 +386,7 @@ void MainMenu::render() {
         if (backButtonTexture) {
             SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
             SDL_RenderFillRect(renderer, &backButton);
-            int w, h;
-            SDL_QueryTexture(backButtonTexture, NULL, NULL, &w, &h);
-            SDL_Rect textRect = {backButton.x + (backButton.w - w) / 2, backButton.y + (backButton.h - h) / 2, w, h};
-            SDL_RenderCopy(renderer, backButtonTexture, NULL, &textRect);
+            renderTexture(backButtonTexture, backButton);
         }
     }
 

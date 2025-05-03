@@ -98,8 +98,16 @@ void Enemy::renderWarning(float warningX, float warningY, Uint32 warningStartTim
 
 void Enemy::renderSpaceShark(SpaceShark& ss) {
     if (ss.active && spaceSharkTexture) {
-        // Góc xoay dựa trên hướng di chuyển xoắn ốc
-        double angle = ss.angle * 180.0 / PI;
+        // Tính vector vận tốc
+        // dx/dt = -radius * sin(angle) * angularSpeed - cos(angle) * dr/dt
+        // dy/dt = radius * cos(angle) * angularSpeed - sin(angle) * dr/dt
+        // dr/dt = -20.0f (từ Game::update)
+        float dr_dt = -20.0f;
+        float dx = -ss.radius * sin(ss.angle) * ss.angularSpeed - cos(ss.angle) * dr_dt;
+        float dy = ss.radius * cos(ss.angle) * ss.angularSpeed - sin(ss.angle) * dr_dt;
+
+        // Tính góc xoay từ vector vận tốc
+        double angle = atan2(dy, dx) * 180.0 / PI;
         SDL_Rect sharkRect = {(int)ss.x - 25, (int)ss.y - 15, 50, 30};
         SDL_Point center = {25, 15};
         SDL_RenderCopyEx(renderer, spaceSharkTexture, NULL, &sharkRect, angle, &center, SDL_FLIP_NONE);

@@ -32,7 +32,7 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m)
       trajectory{400, 300, 60} {
     wavesUntilIncrease = 7 + (rand() % 6);
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
         Life life = {20 + i * 30, 20, false};
         lives.push_back(life);
     }
@@ -91,44 +91,29 @@ void Game::initTextures() {
     SDL_Color textColor = {255, 255, 255, 255};
     TTF_Font* font = TTF_OpenFont("fonts/OpenSans-Regular.ttf", 36);
     if (!font) {
-        std::cerr << "TTF_OpenFont failed for Back to Menu: " << TTF_GetError() << std::endl;
+        std::cerr << "TTF_OpenFont failed: " << TTF_GetError() << std::endl;
         return;
     }
-    SDL_Surface* textSurface = TTF_RenderText_Solid(font, "Back to Menu", textColor);
-    if (!textSurface) {
-        std::cerr << "TTF_RenderText_Solid failed for Back to Menu: " << TTF_GetError() << std::endl;
-        TTF_CloseFont(font);
-        return;
-    }
-    backToMenuTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    if (!backToMenuTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for Back to Menu: " << SDL_GetError() << std::endl;
-    }
-    SDL_FreeSurface(textSurface);
 
-    textSurface = TTF_RenderText_Solid(font, "Restart", textColor);
-    if (!textSurface) {
-        std::cerr << "TTF_RenderText_Solid failed for Restart: " << TTF_GetError() << std::endl;
-        TTF_CloseFont(font);
-        return;
-    }
-    restartTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    if (!restartTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for Restart: " << SDL_GetError() << std::endl;
-    }
-    SDL_FreeSurface(textSurface);
+    auto createTexture = [&](const char* text, SDL_Texture*& texture) {
+        SDL_Surface* textSurface = TTF_RenderText_Solid(font, text, textColor);
+        if (!textSurface) {
+            std::cerr << "TTF_RenderText_Solid failed for " << text << ": " << TTF_GetError() << std::endl;
+            return false;
+        }
+        if (texture) SDL_DestroyTexture(texture);
+        texture = SDL_CreateTextureFromSurface(renderer, textSurface);
+        SDL_FreeSurface(textSurface);
+        if (!texture) {
+            std::cerr << "SDL_CreateTextureFromSurface failed for " << text << ": " << SDL_GetError() << std::endl;
+            return false;
+        }
+        return true;
+    };
 
-    textSurface = TTF_RenderText_Solid(font, "Give Up", textColor);
-    if (!textSurface) {
-        std::cerr << "TTF_RenderText_Solid failed for Give Up: " << TTF_GetError() << std::endl;
-        TTF_CloseFont(font);
-        return;
-    }
-    giveUpTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    if (!giveUpTexture) {
-        std::cerr << "SDL_CreateTextureFromSurface failed for Give Up: " << SDL_GetError() << std::endl;
-    }
-    SDL_FreeSurface(textSurface);
+    createTexture("Back to Menu", backToMenuTexture);
+    createTexture("Restart", restartTexture);
+    createTexture("Give Up", giveUpTexture);
 
     TTF_CloseFont(font);
 }
@@ -245,7 +230,9 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
                 paused = true;
                 menu.gameState = MainMenu::PAUSED;
             } else {
-                totalPausedTime += SDL_GetTicks() - pauseStartTime;
+                if (pauseStartTime != 0) {
+                    totalPausedTime += SDL_GetTicks() - pauseStartTime;
+                }
                 paused = false;
                 pauseStartTime = 0;
                 menu.gameState = MainMenu::PLAYING;
@@ -308,7 +295,9 @@ void Game::handleInput(SDL_Event& event, MainMenu& menu) {
             paused = true;
             menu.gameState = MainMenu::PAUSED;
         } else if (paused) {
-            totalPausedTime += SDL_GetTicks() - pauseStartTime;
+            if (pauseStartTime != 0) {
+                totalPausedTime += SDL_GetTicks() - pauseStartTime;
+            }
             paused = false;
             pauseStartTime = 0;
             menu.gameState = MainMenu::PLAYING;
