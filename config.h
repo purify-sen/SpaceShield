@@ -26,7 +26,6 @@ const std::string IMG_SHARK_BULLET = IMAGE_DIR + "/sharkbullet.png";
 const std::string IMG_PAUSE_BUTTON = IMAGE_DIR + "/pausebutton.png";
 const std::string IMG_MAIN_MENU_BG = IMAGE_DIR + "/mainmenubg.png"; // Ảnh nền Menu
 const std::string IMG_GAME_BG = IMAGE_DIR + "/gamebg.png";         // Ảnh nền Game
-// --- HÌNH ẢNH MỚI ---
 const std::string IMG_ALLY_SHIP = IMAGE_DIR + "/spacesen.png"; // Đường dẫn ảnh đồng minh
 const std::string IMG_HEAL_ITEM = IMAGE_DIR + "/heal.png";     // Đường dẫn ảnh hồi máu
 
@@ -36,7 +35,6 @@ const std::string SFX_PLAYER_HIT = SOUND_DIR + "/player_hit.wav";
 const std::string SFX_BUTTON_CLICK = SOUND_DIR + "/button_click.wav";
 const std::string SFX_GAME_OVER = SOUND_DIR + "/game_over.wav";
 const std::string SFX_WARNING = SOUND_DIR + "/warning.wav";
-// --- ÂM THANH MỚI ---
 const std::string SFX_HEAL_COLLECT = SOUND_DIR + "/heal.wav";    // Đường dẫn âm thanh hồi máu
 const std::string BGM_MENU = SOUND_DIR + "/menu_music.ogg";
 const std::string BGM_GAME = SOUND_DIR + "/game_music.ogg";
