@@ -17,6 +17,7 @@ Mix_Chunk* loadSoundEffect(const std::string& path) {
     Mix_Chunk* chunk = Mix_LoadWAV(path.c_str());
     if (!chunk) {
         std::cerr << "Failed to load sound effect! SDL_mixer Error: " << path << " - " << Mix_GetError() << std::endl;
+        // Có thể thêm xử lý lỗi khác ở đây, ví dụ trả về nullptr hoặc thoát
     }
     return chunk;
 }
@@ -26,16 +27,10 @@ Mix_Music* loadMusic(const std::string& path) {
     Mix_Music* music = Mix_LoadMUS(path.c_str());
     if (!music) {
         std::cerr << "Failed to load music! SDL_mixer Error: " << path << " - " << Mix_GetError() << std::endl;
+        // Có thể thêm xử lý lỗi khác ở đây
     }
     return music;
 }
-
-// --- XÓA ĐỊNH NGHĨA loadTexture Ở ĐÂY ---
-/*
-SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& path) {
-    // ... nội dung hàm đã bị xóa ...
-}
-*/
 
 
 int main(int argc, char* argv[]) {
@@ -96,6 +91,8 @@ int main(int argc, char* argv[]) {
     // Bây giờ gọi hàm loadTexture đã được khai báo trong game.h (và định nghĩa trong game.cpp)
     SDL_Texture* missileTexture = loadTexture(renderer, IMG_MISSILE);
     if (!missileTexture) {
+        // Thêm xử lý lỗi nếu cần thiết, ví dụ thoát game
+        std::cerr << "Error loading missile texture, exiting." << std::endl;
         TTF_CloseFont(mainFont); SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); Mix_CloseAudio(); IMG_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
     }
@@ -114,14 +111,17 @@ int main(int argc, char* argv[]) {
     Mix_Chunk* sfxButtonClick = loadSoundEffect(SFX_BUTTON_CLICK);
     Mix_Chunk* sfxGameOver = loadSoundEffect(SFX_GAME_OVER);
     Mix_Chunk* sfxWarning = loadSoundEffect(SFX_WARNING);
+    // --- NẠP ÂM THANH MỚI ---
+    Mix_Chunk* sfxHealCollect = loadSoundEffect(SFX_HEAL_COLLECT); // Nạp âm thanh heal
     Mix_Music* bgmMenu = loadMusic(BGM_MENU);
     Mix_Music* bgmGame = loadMusic(BGM_GAME);
-    // Nên kiểm tra xem các con trỏ âm thanh có bị null không
+    // Nên kiểm tra xem các con trỏ âm thanh có bị null không, đặc biệt là các SFX quan trọng
 
     // --- Tạo các đối tượng chính của game ---
     MainMenu menu(renderer, mainFont, sfxButtonClick, bgmMenu, mainMenuBgTexture); // Truyền nền menu
     Enemy enemy(renderer, missileTexture); // Truyền texture tên lửa
-    Game game(renderer, &enemy, &menu, sfxShieldHit, sfxPlayerHit, sfxGameOver, sfxWarning, bgmGame, gameBgTexture); // Truyền nền game
+    // --- TRUYỀN ÂM THANH HEAL VÀO CONSTRUCTOR GAME ---
+    Game game(renderer, &enemy, &menu, sfxShieldHit, sfxPlayerHit, sfxGameOver, sfxWarning, sfxHealCollect, bgmGame, gameBgTexture); // Truyền nền game và âm thanh heal
 
     // Áp dụng cài đặt đã nạp (hoặc mặc định) từ menu vào game
     menu.applySettingsToGame(game);
@@ -134,6 +134,8 @@ int main(int argc, char* argv[]) {
     // Bắt đầu phát nhạc menu
     if (bgmMenu) {
         Mix_PlayMusic(bgmMenu, -1); // Phát lặp lại vô hạn (-1)
+    } else {
+        std::cerr << "Warning: Menu BGM not loaded, cannot play." << std::endl;
     }
 
     while (running) {
@@ -153,7 +155,16 @@ int main(int argc, char* argv[]) {
                 case MainMenu::PLAYING:
                 case MainMenu::PAUSED:
                 case MainMenu::GAME_OVER:
-                    game.handleInput(event); // Game tự xử lý input của nó
+                    // --- SỬA DÒNG NÀY ---
+                    // Chỉ chuyển input đến game nếu không phải đang kéo slider trong menu pause
+                    // Sử dụng hàm getter mới: game.isDraggingVolumeSlider()
+                    if (!(menu.gameState == MainMenu::PAUSED && game.isDraggingVolumeSlider())) {
+                         game.handleInput(event); // Game tự xử lý input của nó
+                    }
+                    // Xử lý input cho menu pause (slider) riêng, ngay cả khi đang kéo
+                    if (menu.gameState == MainMenu::PAUSED) {
+                        menu.handleInput(event, running, game); // Cho phép menu xử lý kéo slider
+                    }
                     break;
             }
         }
@@ -173,6 +184,10 @@ int main(int argc, char* argv[]) {
                 menu.gameState = MainMenu::GAME_OVER; // Chuyển trạng thái
             }
         }
+         // Cập nhật MainMenu (ví dụ: logic kéo thả slider trong settings)
+        // (Hiện tại MainMenu không có logic update phức tạp ngoài handleInput)
+        // menu.update(deltaTime);
+
 
         // --- Render ---
         // Render đối tượng phù hợp dựa trên trạng thái
@@ -183,9 +198,21 @@ int main(int argc, char* argv[]) {
                 menu.render(); // Render menu hoặc các màn hình con của nó
                 break;
             case MainMenu::PLAYING:
+                game.render(); // Render màn hình game đang chơi
+                break;
             case MainMenu::PAUSED:
+                 // Render game trước để làm nền cho menu pause
+                 game.render();
+                 // Render các thành phần của menu pause (nút, slider) lên trên game
+                 // Lưu ý: game.render() đã vẽ lớp phủ mờ và các yếu tố pause rồi,
+                 // menu.render() trong trạng thái PAUSED có lẽ không cần thiết
+                 // hoặc cần được điều chỉnh để chỉ vẽ slider nếu cần.
+                 // Tạm thời giữ nguyên để xem xét lại logic render của bạn.
+                 // Nếu game.render() đã xử lý màn hình pause, dòng dưới có thể bỏ đi.
+                 // menu.render(); // Có thể bỏ dòng này nếu game.render() đã vẽ đủ màn hình pause
+                 break;
             case MainMenu::GAME_OVER:
-                game.render(); // Render màn hình game (playing, paused, game over)
+                game.render(); // Render màn hình game over (đã bao gồm các nút)
                 break;
         }
     } // Kết thúc vòng lặp chính
@@ -197,6 +224,8 @@ int main(int argc, char* argv[]) {
     Mix_FreeChunk(sfxButtonClick);
     Mix_FreeChunk(sfxGameOver);
     Mix_FreeChunk(sfxWarning);
+    // --- GIẢI PHÓNG ÂM THANH MỚI ---
+    Mix_FreeChunk(sfxHealCollect); // Giải phóng âm thanh heal
     Mix_FreeMusic(bgmMenu);
     Mix_FreeMusic(bgmGame);
 

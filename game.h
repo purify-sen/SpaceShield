@@ -11,8 +11,21 @@
 #include "life.h"
 
 // --- Khai báo hàm trợ giúp load texture (toàn cục) ---
-// Đặt ở đây để các file khác include game.h có thể thấy
 SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& path);
+
+// --- Khai báo cấu trúc mới ---
+struct AllyShip {
+    float x, y;         // Vị trí hiện tại
+    float speed;        // Tốc độ di chuyển ngang
+    bool active;        // Trạng thái hoạt động
+    bool droppingHeal;  // Cờ báo hiệu đã thả heal hay chưa
+};
+
+struct HealItem {
+    float x, y;         // Vị trí hiện tại
+    float speed;        // Tốc độ rơi xuống
+    bool active;        // Trạng thái hoạt động
+};
 
 class Game {
 private:
@@ -33,12 +46,17 @@ private:
     SDL_Texture* volumeLabelTexture;
     SDL_Texture* giveUpTexture;
     SDL_Texture* backgroundTexture; // Texture nền game
+    // --- Textures mới ---
+    SDL_Texture* allyShipTexture;   // Texture cho tàu đồng minh
+    SDL_Texture* healItemTexture;   // Texture cho vật phẩm hồi máu
 
     // --- Âm thanh ---
     Mix_Chunk* sfxShieldHit;
     Mix_Chunk* sfxPlayerHit;
     Mix_Chunk* sfxGameOver;
     Mix_Chunk* sfxWarning;
+    // --- Âm thanh mới ---
+    Mix_Chunk* sfxHealCollect;      // Âm thanh khi nhặt hồi máu
     Mix_Music* bgmGame;
 
     // --- Trạng thái Game ---
@@ -54,6 +72,8 @@ private:
     Uint32 warningStartTime;
     Uint32 nextSpawnTime;
     Uint32 lastMissileSpawnTime;
+    // --- Thời gian mới ---
+    Uint32 lastAllySpawnTime;       // Thời điểm cuối cùng đồng minh xuất hiện
 
     // --- Điểm số và Waves ---
     int score;
@@ -78,7 +98,7 @@ private:
     SDL_Rect giveUpButton;
     SDL_Rect volumeSlider;
     SDL_Rect volumeKnob;
-    bool isDraggingVolume;
+    bool isDraggingVolume; // Biến này vẫn là private
 
     // --- Đối tượng trong Game ---
     struct Circle { int x, y, r; };
@@ -89,6 +109,9 @@ private:
     std::vector<Target> fastMissiles;
     std::vector<SpaceShark> spaceSharks;
     std::vector<SharkBullet> sharkBullets;
+    // --- Đối tượng trong Game mới ---
+    std::vector<AllyShip> allies;       // Danh sách các tàu đồng minh
+    std::vector<HealItem> healItems;    // Danh sách các vật phẩm hồi máu
 
     // --- Phương thức nội bộ ---
     void initTextures(); // Khởi tạo texture chữ
@@ -107,18 +130,23 @@ private:
     bool CheckCollisionWithChitbox(const SpaceShark& ss);
     bool CheckCollisionWithArc(const SharkBullet& sb);
     bool CheckCollisionWithChitbox(const SharkBullet& sb);
+    // --- Va chạm mới ---
+    bool CheckCollisionWithChitbox(const HealItem& hi); // Va chạm giữa tàu và heal item
 
     void HandleHit(); // Xử lý khi người chơi bị bắn trúng
-
-    // --- XÓA khai báo loadTexture private ở đây nếu có ---
-    // SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& path);
+    // --- Xử lý mới ---
+    void SpawnAlly(); // Hàm tạo đồng minh mới
+    void HandleHealCollection(HealItem& heal); // Hàm xử lý khi nhặt heal
 
 
 public:
     // Constructor nhận các con trỏ và texture nền
+    // --- Cập nhật Constructor để nhận thêm sfxHealCollect ---
     Game(SDL_Renderer* r, Enemy* e, MainMenu* m,
          Mix_Chunk* sfxShieldHit, Mix_Chunk* sfxPlayerHit,
-         Mix_Chunk* sfxGameOver, Mix_Chunk* sfxWarning, Mix_Music* bgmGame,
+         Mix_Chunk* sfxGameOver, Mix_Chunk* sfxWarning,
+         Mix_Chunk* sfxHealCollect, // Thêm âm thanh heal
+         Mix_Music* bgmGame,
          SDL_Texture* bgTexture);
     ~Game();
 
@@ -136,6 +164,8 @@ public:
     void setVolume(int vol);
     int getSensitivity() const { return sensitivity; }
     void setSensitivity(int sens);
+    // --- THÊM GETTER MỚI ---
+    bool isDraggingVolumeSlider() const; // Hàm getter cho isDraggingVolume
 
     // Hàm cho MainMenu quản lý trạng thái
     void setGameStatePlaying();
