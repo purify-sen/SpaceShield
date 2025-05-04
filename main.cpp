@@ -150,21 +150,23 @@ int main(int argc, char* argv[]) {
                 case MainMenu::MENU:
                 case MainMenu::HIGHSCORE:
                 case MainMenu::SETTINGS:
+                    // Khi ở menu, highscore, settings, chỉ MainMenu xử lý input
                     menu.handleInput(event, running, game);
                     break;
                 case MainMenu::PLAYING:
+                    // Khi đang chơi, chỉ Game xử lý input
+                    game.handleInput(event);
+                    break;
                 case MainMenu::PAUSED:
+                    // Khi Pause, Game cần xử lý input cho các thành phần của nó (nút, slider)
+                    game.handleInput(event);
+                    // Nếu cần, MainMenu có thể xử lý thêm input (ví dụ nút Back chung?)
+                    // Hiện tại MainMenu::handleInput không có logic cụ thể cho PAUSED
+                    // menu.handleInput(event, running, game); // Xem xét lại nếu cần thiết
+                    break;
                 case MainMenu::GAME_OVER:
-                    // --- SỬA DÒNG NÀY ---
-                    // Chỉ chuyển input đến game nếu không phải đang kéo slider trong menu pause
-                    // Sử dụng hàm getter mới: game.isDraggingVolumeSlider()
-                    if (!(menu.gameState == MainMenu::PAUSED && game.isDraggingVolumeSlider())) {
-                         game.handleInput(event); // Game tự xử lý input của nó
-                    }
-                    // Xử lý input cho menu pause (slider) riêng, ngay cả khi đang kéo
-                    if (menu.gameState == MainMenu::PAUSED) {
-                        menu.handleInput(event, running, game); // Cho phép menu xử lý kéo slider
-                    }
+                    // Khi Game Over, Game xử lý input cho nút Restart và Back to Menu
+                    game.handleInput(event);
                     break;
             }
         }
@@ -185,8 +187,8 @@ int main(int argc, char* argv[]) {
             }
         }
          // Cập nhật MainMenu (ví dụ: logic kéo thả slider trong settings)
-        // (Hiện tại MainMenu không có logic update phức tạp ngoài handleInput)
-        // menu.update(deltaTime);
+         // Có thể cần update MainMenu nếu có animation hoặc logic nào đó cần chạy liên tục
+         // menu.update(deltaTime);
 
 
         // --- Render ---
@@ -201,18 +203,13 @@ int main(int argc, char* argv[]) {
                 game.render(); // Render màn hình game đang chơi
                 break;
             case MainMenu::PAUSED:
-                 // Render game trước để làm nền cho menu pause
+                 // Khi Pause, Game tự render màn hình pause của nó (bao gồm lớp phủ và các nút/slider)
                  game.render();
-                 // Render các thành phần của menu pause (nút, slider) lên trên game
-                 // Lưu ý: game.render() đã vẽ lớp phủ mờ và các yếu tố pause rồi,
-                 // menu.render() trong trạng thái PAUSED có lẽ không cần thiết
-                 // hoặc cần được điều chỉnh để chỉ vẽ slider nếu cần.
-                 // Tạm thời giữ nguyên để xem xét lại logic render của bạn.
-                 // Nếu game.render() đã xử lý màn hình pause, dòng dưới có thể bỏ đi.
-                 // menu.render(); // Có thể bỏ dòng này nếu game.render() đã vẽ đủ màn hình pause
+                 // Không cần gọi menu.render() ở đây vì Game đã đảm nhiệm việc vẽ màn hình Pause
                  break;
             case MainMenu::GAME_OVER:
-                game.render(); // Render màn hình game over (đã bao gồm các nút)
+                // Khi Game Over, Game tự render màn hình game over của nó
+                game.render();
                 break;
         }
     } // Kết thúc vòng lặp chính

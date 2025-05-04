@@ -320,62 +320,196 @@ void MainMenu::updateSensitivityTexture() {
 
 // Xử lý input cho MainMenu
 void MainMenu::handleInput(SDL_Event& event, bool& running, Game& game) {
-     if (event.type == SDL_MOUSEBUTTONDOWN) {
-        int mouseX, mouseY;
-        SDL_GetMouseState(&mouseX, &mouseY);
-        SDL_Point mousePoint = {mouseX, mouseY};
-        bool buttonClicked = false;
+    if (event.type == SDL_MOUSEBUTTONDOWN) {
+       int mouseX, mouseY;
+       SDL_GetMouseState(&mouseX, &mouseY);
+       SDL_Point mousePoint = {mouseX, mouseY};
+       bool buttonClicked = false; // Cờ để chỉ phát âm thanh click 1 lần
 
-        if (gameState == MENU) {
-            if (SDL_PointInRect(&mousePoint, &playButton)) {
-                buttonClicked = true;
-                gameState = PLAYING;
-                game.reset();
-                applySettingsToGame(game);
-                game.startGame();
-            } else if (SDL_PointInRect(&mousePoint, &highscoreButton)) {
-                buttonClicked = true;
-                gameState = HIGHSCORE;
-                loadHighscores(); // Load lại khi vào màn hình highscore
-                updateHighscoreListTexture();
-            } else if (SDL_PointInRect(&mousePoint, &settingsButton)) {
-                buttonClicked = true;
-                gameState = SETTINGS;
-            } else if (SDL_PointInRect(&mousePoint, &exitButton)) {
-                buttonClicked = true;
-                running = false;
-            }
-        }
-        else if (gameState == HIGHSCORE || gameState == SETTINGS) {
-            if (SDL_PointInRect(&mousePoint, &backButton)) {
-                buttonClicked = true;
-                if (gameState == SETTINGS) {
-                    saveSettings();
-                    applySettingsToGame(game);
-                }
-                gameState = MENU;
-                isDraggingVolumeKnob = false;
-                isDraggingSensitivityKnob = false;
-                // Bật lại nhạc menu nếu cần
+       if (gameState == MENU) {
+           if (SDL_PointInRect(&mousePoint, &playButton)) {
+               buttonClicked = true;
+               gameState = PLAYING;
+               game.reset(); // Reset game state trước khi bắt đầu
+               applySettingsToGame(game); // Áp dụng cài đặt hiện tại
+               game.startGame(); // Bắt đầu game mới
+           } else if (SDL_PointInRect(&mousePoint, &highscoreButton)) {
+               buttonClicked = true;
+               gameState = HIGHSCORE;
+               loadHighscores(); // Load lại điểm cao khi vào màn hình này
+               updateHighscoreListTexture(); // Cập nhật hiển thị
+           } else if (SDL_PointInRect(&mousePoint, &settingsButton)) {
+               buttonClicked = true;
+               gameState = SETTINGS;
+               // Không cần làm gì thêm ở đây, chỉ chuyển state
+           } else if (SDL_PointInRect(&mousePoint, &exitButton)) {
+               buttonClicked = true;
+               running = false; // Tín hiệu dừng vòng lặp chính
+           }
+       }
+       else if (gameState == HIGHSCORE || gameState == SETTINGS) {
+           // Xử lý nút Back chung cho cả Highscore và Settings
+           if (SDL_PointInRect(&mousePoint, &backButton)) {
+               buttonClicked = true;
+               if (gameState == SETTINGS) {
+                   // Chỉ lưu và áp dụng cài đặt khi thoát khỏi màn hình Settings bằng nút Back
+                   saveSettings();
+                   applySettingsToGame(game);
+               }
+               gameState = MENU; // Quay về Menu chính
+               // Reset trạng thái kéo để tránh lỗi nếu thoát khi đang kéo
+               isDraggingVolumeKnob = false;
+               isDraggingSensitivityKnob = false;
+               // Đảm bảo nhạc nền menu được phát lại nếu cần
                 if (Mix_PlayingMusic() == 0 || Mix_PausedMusic() == 1) {
-                     if (bgmMenu) Mix_PlayMusic(bgmMenu, -1);
-                } else if (Mix_PlayingMusic() == 1) {
-                    Mix_HaltMusic();
                     if (bgmMenu) Mix_PlayMusic(bgmMenu, -1);
+               } else if (Mix_PlayingMusic() == 1 && bgmMenu) {
+                   // Nếu đang phát nhạc khác (ví dụ nhạc game chưa dừng hẳn), dừng nó và bật nhạc menu
+                   Mix_HaltMusic();
+                   Mix_PlayMusic(bgmMenu, -1);
                 }
+           }
+       }
+
+       // Xử lý riêng cho màn hình Settings khi nhấn chuột
+       if (gameState == SETTINGS) {
+           // Kiểm tra nhấn vào núm Volume hoặc thanh trượt Volume
+           if (SDL_PointInRect(&mousePoint, &volumeKnob) || SDL_PointInRect(&mousePoint, &volumeSlider)) {
+                // Không cần set buttonClicked = true vì kéo thả không nên có tiếng click
+               isDraggingVolumeKnob = true;
+               // Xử lý click trực tiếp lên thanh trượt để nhảy núm tới vị trí click
+                if (SDL_PointInRect(&mousePoint, &volumeSlider) && !SDL_PointInRect(&mousePoint, &volumeKnob)) {
+                    int mouseX_Adjusted = mouseX;
+                     // --- BỔ SUNG LOGIC NHẢY NÚM KHI CLICK VÀO SLIDER ---
+                     int knobRange = volumeSlider.w - volumeKnob.w;
+                     if (knobRange > 0) { // Tránh chia cho 0
+                          // Giới hạn mouseX trong phạm vi slider trước khi tính toán
+                          mouseX_Adjusted = std::max(volumeSlider.x, std::min(mouseX_Adjusted, volumeSlider.x + volumeSlider.w));
+                          // Tính toán volume mới dựa trên vị trí click
+                          int newVolume = static_cast<int>(round(((float)(mouseX_Adjusted - volumeSlider.x) / volumeSlider.w) * 100.0f));
+                          volume = std::max(0, std::min(newVolume, 100)); // Clamp 0-100
+                          // Cập nhật vị trí núm và texture
+                          volumeKnob.x = volumeSlider.x + static_cast<int>(round(((float)volume / 100.0f) * knobRange));
+                          updateVolumeTexture();
+                          // Áp dụng âm lượng ngay lập tức (tùy chọn)
+                          Mix_VolumeMusic(volume * MIX_MAX_VOLUME / 100);
+                          Mix_Volume(-1, volume * MIX_MAX_VOLUME / 100);
+                     }
+                     // --- KẾT THÚC LOGIC NHẢY NÚM ---
+                }
+           }
+           // Kiểm tra nhấn vào núm Sensitivity hoặc thanh trượt Sensitivity
+           else if (SDL_PointInRect(&mousePoint, &sensitivityKnob) || SDL_PointInRect(&mousePoint, &sensitivitySlider)) {
+               isDraggingSensitivityKnob = true;
+                // Xử lý click trực tiếp lên thanh trượt để nhảy núm tới vị trí click
+                if (SDL_PointInRect(&mousePoint, &sensitivitySlider) && !SDL_PointInRect(&mousePoint, &sensitivityKnob)) {
+                    int mouseX_Adjusted = mouseX;
+                     // --- BỔ SUNG LOGIC NHẢY NÚM KHI CLICK VÀO SLIDER ---
+                     int knobRange = sensitivitySlider.w - sensitivityKnob.w;
+                     if (knobRange > 0) {
+                          mouseX_Adjusted = std::max(sensitivitySlider.x, std::min(mouseX_Adjusted, sensitivitySlider.x + sensitivitySlider.w));
+                          int newSensitivity = static_cast<int>(round(((float)(mouseX_Adjusted - sensitivitySlider.x) / sensitivitySlider.w) * 100.0f));
+                          sensitivity = std::max(0, std::min(newSensitivity, 100));
+                          sensitivityKnob.x = sensitivitySlider.x + static_cast<int>(round(((float)sensitivity / 100.0f) * knobRange));
+                          updateSensitivityTexture();
+                          // Không cần áp dụng sensitivity ngay vì nó thường dùng trong game.update()
+                     }
+                     // --- KẾT THÚC LOGIC NHẢY NÚM ---
+                }
+           }
+       }
+
+       // Phát âm thanh click nếu có nút được nhấn (trừ việc bắt đầu kéo slider)
+       if (buttonClicked && sfxButtonClick) {
+            Mix_PlayChannel(CHANNEL_SFX, sfxButtonClick, 0);
+       }
+   }
+   else if (event.type == SDL_MOUSEBUTTONUP) {
+        // Khi thả chuột, dừng việc kéo cả hai slider
+        // Chỉ cập nhật texture một lần cuối khi thả chuột (tối ưu hơn)
+        if (isDraggingVolumeKnob) {
+           isDraggingVolumeKnob = false;
+            // updateVolumeTexture(); // Cập nhật lần cuối nếu muốn tối ưu
+            // Áp dụng âm lượng lần cuối (đảm bảo)
+            Mix_VolumeMusic(volume * MIX_MAX_VOLUME / 100);
+            Mix_Volume(-1, volume * MIX_MAX_VOLUME / 100);
+        }
+        if (isDraggingSensitivityKnob) {
+            isDraggingSensitivityKnob = false;
+            // updateSensitivityTexture(); // Cập nhật lần cuối nếu muốn tối ưu
+        }
+   }
+   else if (event.type == SDL_MOUSEMOTION) {
+       // --- THÊM LOGIC XỬ LÝ KÉO THẢ SLIDER Ở ĐÂY ---
+       if (gameState == SETTINGS) {
+           int mouseX, mouseY; // Không cần mouseY nhưng cứ lấy
+           SDL_GetMouseState(&mouseX, &mouseY);
+
+           // Xử lý kéo núm Volume
+           if (isDraggingVolumeKnob) {
+               int knobRange = volumeSlider.w - volumeKnob.w;
+               if (knobRange > 0) { // Tránh lỗi nếu slider quá nhỏ
+                   // Tính vị trí X mới cho núm dựa trên chuột, giới hạn trong slider
+                   int newKnobX = mouseX - volumeKnob.w / 2; // Căn giữa núm với chuột
+                   newKnobX = std::max(volumeSlider.x, std::min(newKnobX, volumeSlider.x + knobRange));
+                   volumeKnob.x = newKnobX; // Cập nhật vị trí núm trực quan
+
+                   // Tính giá trị volume mới (0-100) dựa trên vị trí núm
+                   int newVolume = static_cast<int>(round(((float)(newKnobX - volumeSlider.x) / knobRange) * 100.0f));
+                   volume = std::max(0, std::min(newVolume, 100)); // Clamp 0-100
+
+                   // Cập nhật hiển thị text volume
+                   updateVolumeTexture(); // <-- Cập nhật text ngay khi kéo
+
+                   // Áp dụng âm lượng ngay lập tức để nghe thay đổi
+                   Mix_VolumeMusic(volume * MIX_MAX_VOLUME / 100);
+                   Mix_Volume(-1, volume * MIX_MAX_VOLUME / 100); // Áp dụng cho SFX
+               }
+           }
+           // Xử lý kéo núm Sensitivity
+           else if (isDraggingSensitivityKnob) {
+               int knobRange = sensitivitySlider.w - sensitivityKnob.w;
+                if (knobRange > 0) {
+                    int newKnobX = mouseX - sensitivityKnob.w / 2;
+                    newKnobX = std::max(sensitivitySlider.x, std::min(newKnobX, sensitivitySlider.x + knobRange));
+                    sensitivityKnob.x = newKnobX;
+
+                    int newSensitivity = static_cast<int>(round(((float)(newKnobX - sensitivitySlider.x) / knobRange) * 100.0f));
+                    sensitivity = std::max(0, std::min(newSensitivity, 100));
+
+                    // Cập nhật hiển thị text sensitivity
+                    updateSensitivityTexture(); // <-- Cập nhật text ngay khi kéo
+                }
+           }
+       }
+       // --- KẾT THÚC LOGIC KÉO THẢ ---
+   }
+   // Xử lý phím ESC (có thể dùng để quay lại Menu từ Settings/Highscore)
+   if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+        if (gameState == SETTINGS || gameState == HIGHSCORE) {
+            if (gameState == SETTINGS) {
+                // Lưu và áp dụng cài đặt khi thoát bằng ESC
+                saveSettings();
+                applySettingsToGame(game);
             }
+            gameState = MENU; // Quay về menu chính
+            isDraggingVolumeKnob = false;
+            isDraggingSensitivityKnob = false;
+            // Bật lại nhạc menu nếu cần
+            if (Mix_PlayingMusic() == 0 || Mix_PausedMusic() == 1) {
+                 if (bgmMenu) Mix_PlayMusic(bgmMenu, -1);
+            } else if (Mix_PlayingMusic() == 1 && bgmMenu) {
+               Mix_HaltMusic();
+               Mix_PlayMusic(bgmMenu, -1);
+            }
+            // Có thể phát âm thanh Back ở đây nếu muốn
+            // if (sfxButtonClick) Mix_PlayChannel(CHANNEL_SFX, sfxButtonClick, 0);
         }
-        if (gameState == SETTINGS) {
-            if (SDL_PointInRect(&mousePoint, &volumeKnob)) { buttonClicked = true; isDraggingVolumeKnob = true; }
-            else if (SDL_PointInRect(&mousePoint, &sensitivityKnob)) { buttonClicked = true; isDraggingSensitivityKnob = true; }
-            else if (SDL_PointInRect(&mousePoint, &volumeSlider)) { /* ... xử lý click slider volume ... */ buttonClicked = true; isDraggingVolumeKnob = true; }
-            else if (SDL_PointInRect(&mousePoint, &sensitivitySlider)) { /* ... xử lý click slider sensitivity ... */ buttonClicked = true; isDraggingSensitivityKnob = true; }
-        }
-         if (buttonClicked && sfxButtonClick) { Mix_PlayChannel(CHANNEL_SFX, sfxButtonClick, 0); }
+        // Lưu ý: Nếu đang ở MENU mà nhấn ESC thì có thể xử lý thoát game (tùy ý)
+        // else if (gameState == MENU) {
+        //     running = false;
+        // }
     }
-    else if (event.type == SDL_MOUSEBUTTONUP) { isDraggingVolumeKnob = false; isDraggingSensitivityKnob = false; }
-    else if (event.type == SDL_MOUSEMOTION) { /* ... xử lý kéo slider ... */ }
-    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) { /* ... xử lý ESC ... */ }
 }
 
 // Render MainMenu
