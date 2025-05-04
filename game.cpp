@@ -202,34 +202,60 @@ void Game::initTextures() {
 
 // Cập nhật texture điểm số
 void Game::updateScoreTexture() {
-    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_LARGE);
-    if (!font) { std::cerr << "Failed to open font for score: " << TTF_GetError() << std::endl; return; }
+    // Sử dụng cỡ chữ nhỏ hơn đã định nghĩa trong config.h
+    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_SMALL); // <--- THAY ĐỔI CỠ FONT Ở ĐÂY
+    if (!font) {
+        std::cerr << "Failed to open font for score (small): " << TTF_GetError() << std::endl;
+         if (scoreTexture) SDL_DestroyTexture(scoreTexture); // Reset texture nếu font lỗi
+         scoreTexture = nullptr;
+        return;
+    }
     std::stringstream ss;
     ss << "Score: " << score;
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, ss.str().c_str(), TEXT_COLOR);
     TTF_CloseFont(font); // Đóng font ngay
-    if (!textSurface) { std::cerr << "Failed to render score text: " << TTF_GetError() << std::endl; return; }
-    if (scoreTexture) SDL_DestroyTexture(scoreTexture);
+    if (!textSurface) {
+        std::cerr << "Failed to render score text (small): " << TTF_GetError() << std::endl;
+        if (scoreTexture) SDL_DestroyTexture(scoreTexture);
+        scoreTexture = nullptr;
+        return;
+    }
+    if (scoreTexture) SDL_DestroyTexture(scoreTexture); // Hủy texture cũ
     scoreTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-    if (!scoreTexture) { std::cerr << "Failed to create score texture: " << SDL_GetError() << std::endl; }
+    if (!scoreTexture) {
+        std::cerr << "Failed to create score texture (small): " << SDL_GetError() << std::endl;
+    }
 }
 
 // Cập nhật texture điểm cao
 void Game::updateHighscoreTexture() {
-    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_LARGE);
-     if (!font) { std::cerr << "Failed to open font for highscore: " << TTF_GetError() << std::endl; return; }
+    // Sử dụng cỡ chữ nhỏ hơn đã định nghĩa trong config.h
+    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_SMALL); // <--- THAY ĐỔI CỠ FONT Ở ĐÂY
+     if (!font) {
+         std::cerr << "Failed to open font for highscore (small): " << TTF_GetError() << std::endl;
+         if (highscoreTexture) SDL_DestroyTexture(highscoreTexture);
+         highscoreTexture = nullptr;
+         return;
+     }
     std::stringstream ss;
     // Lấy điểm cao nhất từ MainMenu (đảm bảo menu đã load highscores)
     int highscore = (menu && !menu->highscores.empty()) ? menu->highscores[0] : 0;
     ss << "Highscore: " << highscore;
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, ss.str().c_str(), TEXT_COLOR);
     TTF_CloseFont(font); // Đóng font ngay
-    if (!textSurface) { std::cerr << "Failed to render highscore text: " << TTF_GetError() << std::endl; return; }
-    if (highscoreTexture) SDL_DestroyTexture(highscoreTexture);
+    if (!textSurface) {
+        std::cerr << "Failed to render highscore text (small): " << TTF_GetError() << std::endl;
+         if (highscoreTexture) SDL_DestroyTexture(highscoreTexture);
+         highscoreTexture = nullptr;
+        return;
+    }
+    if (highscoreTexture) SDL_DestroyTexture(highscoreTexture); // Hủy texture cũ
     highscoreTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
-     if (!highscoreTexture) { std::cerr << "Failed to create highscore texture: " << SDL_GetError() << std::endl; }
+     if (!highscoreTexture) {
+         std::cerr << "Failed to create highscore texture (small): " << SDL_GetError() << std::endl;
+     }
 }
 
 // Các hàm update texture chữ cố định không cần thay đổi
@@ -308,13 +334,16 @@ void Game::handleInput(SDL_Event& event) {
         // Tính toán vị trí mới của núm dựa trên chuột X
         int newKnobX = mouseX - volumeKnob.w / 2;
         // Giới hạn vị trí núm trong phạm vi thanh trượt
-        newKnobX = std::max(volumeSlider.x, std::min(newKnobX, volumeSlider.x + volumeSlider.w - volumeKnob.w));
-        volumeKnob.x = newKnobX;
-        // Tính toán giá trị volume mới (0-100)
-        int newVolume = static_cast<int>(round(((float)(newKnobX - volumeSlider.x) / (volumeSlider.w - volumeKnob.w)) * 100.0f));
-        // Đảm bảo volume trong khoảng 0-100
-        newVolume = std::max(0, std::min(newVolume, 100));
-        setVolume(newVolume); // Áp dụng volume mới
+        int knobRange = volumeSlider.w - volumeKnob.w;
+        if (knobRange > 0) { // Thêm kiểm tra để tránh lỗi nếu slider quá nhỏ
+            newKnobX = std::max(volumeSlider.x, std::min(newKnobX, volumeSlider.x + knobRange));
+            volumeKnob.x = newKnobX;
+            // Tính toán giá trị volume mới (0-100)
+            int newVolume = static_cast<int>(round(((float)(newKnobX - volumeSlider.x) / knobRange) * 100.0f));
+            // Đảm bảo volume trong khoảng 0-100
+            newVolume = std::max(0, std::min(newVolume, 100));
+            setVolume(newVolume); // Áp dụng volume mới
+        }
      }
     // Phím ESC (Pause/Resume)
     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
@@ -700,19 +729,29 @@ void Game::render() {
             }
         }
 
-
-        // Render điểm số và điểm cao
+        // --- SỬA ĐỔI PHẦN RENDER ĐIỂM SỐ VÀ ĐIỂM CAO KHI CHƠI ---
         if (scoreTexture) {
             int w, h; SDL_QueryTexture(scoreTexture, NULL, NULL, &w, &h);
-            SDL_Rect scoreRect = {SCREEN_WIDTH - w - 10, 10, w, h}; // Góc trên phải
+            // Sử dụng các hằng số vị trí từ config.h
+            SDL_Rect scoreRect = {SCREEN_WIDTH - w - INGAME_SCORE_TEXT_PADDING_X, // Vị trí X (căn phải)
+                                  INGAME_SCORE_TEXT_Y,                          // Vị trí Y mới
+                                  w, h};
             SDL_RenderCopy(renderer, scoreTexture, NULL, &scoreRect);
+
+            // Vẽ Highscore ngay bên dưới Score (nếu có texture)
+            if (highscoreTexture) {
+                int hw, hh; SDL_QueryTexture(highscoreTexture, NULL, NULL, &hw, &hh);
+                // Vị trí X tương tự Score, Y tính dựa trên Score
+                SDL_Rect highscoreRect = {SCREEN_WIDTH - hw - INGAME_SCORE_TEXT_PADDING_X,      // Vị trí X (căn phải)
+                                          scoreRect.y + h + INGAME_HIGHSCORE_TEXT_Y_OFFSET, // Vị trí Y (dưới Score)
+                                          hw, hh};
+                SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
+            }
         }
-         if (highscoreTexture) {
-            int w, h; SDL_QueryTexture(highscoreTexture, NULL, NULL, &w, &h);
-            SDL_Rect highscoreRect = {SCREEN_WIDTH - w - 10, 10 + h + 5, w, h}; // Dưới điểm số
-            SDL_RenderCopy(renderer, highscoreTexture, NULL, &highscoreRect);
-        }
-    }
+        // --- KẾT THÚC SỬA ĐỔI ---
+
+    } // Kết thúc if (!gameOver && !paused)
+
 
     // Render nút Pause (luôn hiển thị khi không game over)
     if (!gameOver && pauseButtonTexture) { SDL_RenderCopy(renderer, pauseButtonTexture, NULL, &pauseButton); }
@@ -757,8 +796,8 @@ void Game::render() {
 
         // Render các yếu tố Game Over
         renderTextureAt(gameOverTextTexture, SCREEN_WIDTH / 2, GAMEOVER_TITLE_Y);
-        renderTextureAt(scoreTexture, SCREEN_WIDTH / 2, SCORE_LABEL_Y);
-        renderTextureAt(highscoreTexture, SCREEN_WIDTH / 2, HIGHSCORE_LABEL_Y);
+        renderTextureAt(scoreTexture, SCREEN_WIDTH / 2, SCORE_LABEL_Y); // Dùng scoreTexture (đã là chữ nhỏ)
+        renderTextureAt(highscoreTexture, SCREEN_WIDTH / 2, HIGHSCORE_LABEL_Y); // Dùng highscoreTexture (đã là chữ nhỏ)
 
         // Vẽ nút Restart
         SDL_SetRenderDrawColor(renderer, BUTTON_COLOR.r, BUTTON_COLOR.g, BUTTON_COLOR.b, BUTTON_COLOR.a);
@@ -779,8 +818,8 @@ void Game::render() {
 
         // Render các yếu tố Pause
         renderTextureAt(pausedTexture, SCREEN_WIDTH / 2, PAUSED_TITLE_Y);
-        renderTextureAt(scoreTexture, SCREEN_WIDTH / 2, SCORE_LABEL_Y);
-        renderTextureAt(highscoreTexture, SCREEN_WIDTH / 2, HIGHSCORE_LABEL_Y);
+        renderTextureAt(scoreTexture, SCREEN_WIDTH / 2, SCORE_LABEL_Y); // Dùng scoreTexture (đã là chữ nhỏ)
+        renderTextureAt(highscoreTexture, SCREEN_WIDTH / 2, HIGHSCORE_LABEL_Y); // Dùng highscoreTexture (đã là chữ nhỏ)
 
         // Render Volume Slider
         renderTextureAt(volumeLabelTexture, volumeSlider.x, VOLUME_LABEL_Y, false); // Canh trái
@@ -798,6 +837,7 @@ void Game::render() {
 
     SDL_RenderPresent(renderer); // Hiển thị tất cả những gì đã vẽ lên màn hình
 }
+
 
 // Reset trạng thái game về ban đầu
 void Game::reset() {
@@ -1062,9 +1102,13 @@ void Game::SpawnAlly() {
 void Game::setVolume(int vol) {
     if (vol >= 0 && vol <= 100) {
         volume = vol;
-        // Cập nhật vị trí núm volume trên thanh trượt
+        // Cập nhật vị trí núm volume trên thanh trượt (trong màn hình Pause)
         int knobRange = volumeSlider.w - volumeKnob.w;
-        volumeKnob.x = volumeSlider.x + static_cast<int>(round(((float)volume / 100.0f) * knobRange));
+         if (knobRange > 0) { // Kiểm tra tránh chia cho 0 hoặc kết quả âm
+             volumeKnob.x = volumeSlider.x + static_cast<int>(round(((float)volume / 100.0f) * knobRange));
+        } else {
+            volumeKnob.x = volumeSlider.x; // Đặt ở đầu nếu slider quá nhỏ
+        }
         // Cập nhật âm lượng thực tế của nhạc và SFX
         Mix_VolumeMusic(volume * MIX_MAX_VOLUME / 100); // Âm lượng nhạc nền
         Mix_Volume(-1, volume * MIX_MAX_VOLUME / 100); // Âm lượng tất cả SFX (-1)

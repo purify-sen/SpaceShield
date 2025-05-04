@@ -48,6 +48,7 @@ constexpr int CHANNEL_SFX = -1; // Sử dụng kênh mặc định cho hầu h�
 constexpr int CHANNEL_WARNING = 1; // Kênh riêng cho warning để có thể dừng
 
 // --- Cài đặt Font ---
+constexpr int FONT_SIZE_SMALL = 18; // <-- THÊM CỠ CHỮ NHỎ MỚI -->
 constexpr int FONT_SIZE_NORMAL = 24;
 constexpr int FONT_SIZE_LARGE = 36;
 constexpr int FONT_SIZE_XLARGE = 48;
@@ -181,6 +182,11 @@ const int VOLUME_LABEL_Y_SETTINGS = VOLUME_SLIDER_RECT_SETTINGS.y - 40; // Nhãn
 const SDL_Rect SENSITIVITY_SLIDER_RECT_SETTINGS = { (SCREEN_WIDTH - BUTTON_WIDTH) / 2, 380, BUTTON_WIDTH, 10 }; // Thanh trượt Sensitivity trong Settings
 const SDL_Rect SENSITIVITY_KNOB_RECT_SETTINGS = { SENSITIVITY_SLIDER_RECT_SETTINGS.x + (int)(DEFAULT_SENSITIVITY * SENSITIVITY_SLIDER_RECT_SETTINGS.w / 100.0f) - 5, 375, 10, 20 }; // Núm Sensitivity trong Settings
 const int SENSITIVITY_LABEL_Y_SETTINGS = SENSITIVITY_SLIDER_RECT_SETTINGS.y - 40; // Nhãn Sensitivity trong Settings
+
+// --- THÊM HẰNG SỐ VỊ TRÍ ĐIỂM KHI CHƠI ---
+constexpr int INGAME_SCORE_TEXT_PADDING_X = 15;   // Khoảng cách từ cạnh phải màn hình
+constexpr int INGAME_SCORE_TEXT_Y = 40;           // Vị trí Y của dòng Score (tăng lên để thấp xuống)
+constexpr int INGAME_HIGHSCORE_TEXT_Y_OFFSET = 3; // Khoảng cách dọc giữa Score và Highscore
 
 // --- Khác ---
 constexpr int CIRCLE_SEGMENTS = 36; // Số đoạn vẽ hình tròn
