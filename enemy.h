@@ -38,15 +38,15 @@ public:
     // Con trỏ đến renderer chính
     SDL_Renderer* renderer;
     // Textures cho các loại kẻ địch và hiệu ứng
-    SDL_Texture* missileTexture;     // Tên lửa thường
+    SDL_Texture* missileTexture;     // Tên lửa thường (được truyền vào)
     SDL_Texture* fastMissileTexture; // Tên lửa nhanh
     SDL_Texture* warningTexture;     // Cảnh báo tên lửa nhanh
     SDL_Texture* spaceSharkTexture;  // Cá mập không gian
     SDL_Texture* sharkBulletTexture; // Đạn cá mập
 
-    // Hàm khởi tạo: Nạp textures
+    // Hàm khởi tạo: Nạp textures (ngoại trừ missileTexture)
     Enemy(SDL_Renderer* r, SDL_Texture* mt);
-    // Hàm hủy: Giải phóng textures
+    // Hàm hủy: Giải phóng textures đã nạp trong lớp này
     ~Enemy();
 
     // Hàm render cho từng loại đối tượng

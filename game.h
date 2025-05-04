@@ -5,13 +5,18 @@
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_mixer.h>
 #include <vector>
+#include <string> // Thêm string header
 #include "enemy.h"
 #include "mainmenu.h"
 #include "life.h"
 
+// --- Khai báo hàm trợ giúp load texture (toàn cục) ---
+// Đặt ở đây để các file khác include game.h có thể thấy
+SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& path);
+
 class Game {
 private:
-    // --- Pointers and References ---
+    // --- Con trỏ và Tham chiếu ---
     SDL_Renderer* renderer;
     Enemy* enemy;
     MainMenu* menu;
@@ -27,21 +32,22 @@ private:
     SDL_Texture* gameOverTextTexture;
     SDL_Texture* volumeLabelTexture;
     SDL_Texture* giveUpTexture;
+    SDL_Texture* backgroundTexture; // Texture nền game
 
-    // --- Sounds ---
+    // --- Âm thanh ---
     Mix_Chunk* sfxShieldHit;
     Mix_Chunk* sfxPlayerHit;
     Mix_Chunk* sfxGameOver;
     Mix_Chunk* sfxWarning;
     Mix_Music* bgmGame;
 
-    // --- Game State ---
+    // --- Trạng thái Game ---
     bool gameOver;
     bool paused;
     bool showWarning;
     bool justStarted;
 
-    // --- Timing ---
+    // --- Thời gian ---
     Uint32 startTime;
     Uint32 pauseStartTime;
     Uint32 totalPausedTime;
@@ -49,22 +55,22 @@ private:
     Uint32 nextSpawnTime;
     Uint32 lastMissileSpawnTime;
 
-    // --- Score and Waves ---
+    // --- Điểm số và Waves ---
     int score;
     int missileCount;
     int waveCount;
     int wavesUntilIncrease;
     int spawnedMissilesInWave;
 
-    // --- Position and Angle ---
+    // --- Vị trí và Góc ---
     int warningX, warningY;
     float arcStartAngle;
 
-    // --- Settings (synced from MainMenu) ---
+    // --- Cài đặt ---
     int volume;
     int sensitivity;
 
-    // --- UI Elements in Game ---
+    // --- Giao diện người dùng ---
     SDL_Rect chitbox;
     SDL_Rect pauseButton;
     SDL_Rect backToMenuButton;
@@ -74,7 +80,7 @@ private:
     SDL_Rect volumeKnob;
     bool isDraggingVolume;
 
-    // --- Game Objects ---
+    // --- Đối tượng trong Game ---
     struct Circle { int x, y, r; };
     Circle trajectory;
 
@@ -84,8 +90,8 @@ private:
     std::vector<SpaceShark> spaceSharks;
     std::vector<SharkBullet> sharkBullets;
 
-    // --- Internal Methods ---
-    void initTextures();
+    // --- Phương thức nội bộ ---
+    void initTextures(); // Khởi tạo texture chữ
     void updateScoreTexture();
     void updateHighscoreTexture();
     void updatePausedTexture();
@@ -94,6 +100,7 @@ private:
     void DrawCircle(SDL_Renderer* renderer, const Circle& c);
     void DrawArc(SDL_Renderer* renderer, const Circle& c, double startAngle, double arcAngle);
 
+    // Kiểm tra va chạm
     bool CheckCollisionWithArc(const Target& t);
     bool CheckCollisionWithChitbox(const Target& t);
     bool CheckCollisionWithArc(const SpaceShark& ss);
@@ -101,15 +108,21 @@ private:
     bool CheckCollisionWithArc(const SharkBullet& sb);
     bool CheckCollisionWithChitbox(const SharkBullet& sb);
 
-    void HandleHit();
+    void HandleHit(); // Xử lý khi người chơi bị bắn trúng
+
+    // --- XÓA khai báo loadTexture private ở đây nếu có ---
+    // SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& path);
+
 
 public:
-    // Constructor updated to receive sound pointers (without explosion)
+    // Constructor nhận các con trỏ và texture nền
     Game(SDL_Renderer* r, Enemy* e, MainMenu* m,
          Mix_Chunk* sfxShieldHit, Mix_Chunk* sfxPlayerHit,
-         Mix_Chunk* sfxGameOver, Mix_Chunk* sfxWarning, Mix_Music* bgmGame);
+         Mix_Chunk* sfxGameOver, Mix_Chunk* sfxWarning, Mix_Music* bgmGame,
+         SDL_Texture* bgTexture);
     ~Game();
 
+    // Các hàm chính
     void handleInput(SDL_Event& event);
     void update(float deltaTime);
     void render();
@@ -122,10 +135,9 @@ public:
     int getVolume() const { return volume; }
     void setVolume(int vol);
     int getSensitivity() const { return sensitivity; }
-    // *** FIX: Only keep the declaration ***
-    void setSensitivity(int sens); // Declaration only
+    void setSensitivity(int sens);
 
-    // Functions for MainMenu to manage game state
+    // Hàm cho MainMenu quản lý trạng thái
     void setGameStatePlaying();
     void setGameStatePaused();
     void triggerGameOver();

@@ -14,7 +14,7 @@ const std::string FONT_PATH = "fonts/OpenSans-Regular.ttf";
 const std::string PLAYER_DATA_DIR = "playerdata";
 const std::string PLAYER_DATA_FILE = PLAYER_DATA_DIR + "/playerdata";
 const std::string IMAGE_DIR = "images";
-const std::string SOUND_DIR = "sounds"; // Thư mục âm thanh
+const std::string SOUND_DIR = "sounds";
 
 // Hình ảnh
 const std::string IMG_SPACESHIP = IMAGE_DIR + "/mspaceship.png";
@@ -24,27 +24,25 @@ const std::string IMG_WARNING = IMAGE_DIR + "/fwarning.png";
 const std::string IMG_SPACE_SHARK = IMAGE_DIR + "/spaceshark.png";
 const std::string IMG_SHARK_BULLET = IMAGE_DIR + "/sharkbullet.png";
 const std::string IMG_PAUSE_BUTTON = IMAGE_DIR + "/pausebutton.png";
+const std::string IMG_MAIN_MENU_BG = IMAGE_DIR + "/mainmenubg.png"; // Ảnh nền Menu
+const std::string IMG_GAME_BG = IMAGE_DIR + "/gamebg.png";         // Ảnh nền Game
 
-// --- Âm thanh (Chỉ những file yêu cầu) ---
-// Hiệu ứng (SFX)
+// --- Âm thanh ---
 const std::string SFX_SHIELD_HIT = SOUND_DIR + "/shield_hit.wav";
 const std::string SFX_PLAYER_HIT = SOUND_DIR + "/player_hit.wav";
-// const std::string SFX_EXPLOSION = SOUND_DIR + "/explosion.wav"; // *** Đã loại bỏ ***
 const std::string SFX_BUTTON_CLICK = SOUND_DIR + "/button_click.wav";
 const std::string SFX_GAME_OVER = SOUND_DIR + "/game_over.wav";
 const std::string SFX_WARNING = SOUND_DIR + "/warning.wav";
-// Nhạc nền (BGM)
 const std::string BGM_MENU = SOUND_DIR + "/menu_music.ogg";
 const std::string BGM_GAME = SOUND_DIR + "/game_music.ogg";
-
 
 // --- Cài đặt âm thanh Mixer ---
 constexpr int AUDIO_FREQUENCY = 44100;
 constexpr int AUDIO_CHANNELS = 2;
 constexpr int AUDIO_CHUNK_SIZE = 2048;
-constexpr int DEFAULT_VOLUME = 100; // Âm lượng mặc định (0-100)
-constexpr int CHANNEL_SFX = -1; // Phát trên kênh khả dụng đầu tiên
-constexpr int CHANNEL_WARNING = 1; // Dành riêng kênh cho cảnh báo
+constexpr int DEFAULT_VOLUME = 100;
+constexpr int CHANNEL_SFX = -1;
+constexpr int CHANNEL_WARNING = 1;
 
 // --- Cài đặt Font ---
 constexpr int FONT_SIZE_NORMAL = 24;
@@ -54,7 +52,7 @@ const SDL_Color TEXT_COLOR = {255, 255, 255, 255}; // Trắng
 const SDL_Color BUTTON_COLOR = {100, 100, 100, 255}; // Xám
 const SDL_Color SLIDER_BG_COLOR = {255, 255, 255, 255}; // Trắng
 const SDL_Color SLIDER_KNOB_COLOR = {255, 0, 0, 255}; // Đỏ
-const SDL_Color SLIDER_KNOB_DRAG_COLOR = {255, 255, 0, 255}; // Vàng (khi kéo)
+const SDL_Color SLIDER_KNOB_DRAG_COLOR = {255, 255, 0, 255}; // Vàng
 const SDL_Color PAUSE_OVERLAY_COLOR = {0, 0, 0, 128}; // Đen trong suốt
 
 // --- Cài đặt Game ---
@@ -64,10 +62,10 @@ constexpr int LIFE_ICON_RADIUS = 10;
 constexpr int LIFE_ICON_SPACING = 30;
 constexpr int LIFE_ICON_START_X = 20;
 constexpr int LIFE_ICON_START_Y = 20;
-const SDL_Color LIFE_ICON_ACTIVE_COLOR = {0, 0, 255, 255}; // Xanh dương
-const SDL_Color LIFE_ICON_INACTIVE_COLOR = {255, 0, 0, 255}; // Đỏ
+const SDL_Color LIFE_ICON_ACTIVE_COLOR = {0, 0, 255, 255};
+const SDL_Color LIFE_ICON_INACTIVE_COLOR = {255, 0, 0, 255};
 
-// --- Tàu người chơi (Chitbox) & Khiên (Arc) ---
+// --- Tàu người chơi & Khiên ---
 const SDL_Rect PLAYER_CHITBOX = {375, 250, 50, 100};
 const SDL_Point TRAJECTORY_CENTER = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2};
 constexpr int TRAJECTORY_RADIUS = 60;
