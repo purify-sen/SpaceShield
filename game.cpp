@@ -9,19 +9,18 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_mixer.h>
 #include <random>
-#include <memory> // Cho std::unique_ptr nếu muốn dùng
+#include <memory> 
 
-// --- C++11 Random Number Generation ---
+
 std::random_device rd;
 std::mt19937 gen(rd());
-std::uniform_real_distribution<> dis(0.0, 1.0); // Phân bố đều từ 0.0 đến 1.0
-std::uniform_int_distribution<> dist_wave_increase(0, RANDOM_WAVES_UNTIL_INCREASE -1); // Ngẫu nhiên số wave tăng thêm
-std::uniform_int_distribution<> dist_wave_delay(0, RANDOM_WAVE_DELAY -1); // Ngẫu nhiên độ trễ wave tăng thêm
-std::uniform_int_distribution<> dist_side(0, 3); // Chọn cạnh màn hình (0:trái, 1:phải, 2:trên, 3:dưới)
-std::uniform_int_distribution<> dist_y_spawn(0, SCREEN_HEIGHT - 1); // Vị trí Y ngẫu nhiên
-std::uniform_int_distribution<> dist_x_spawn(0, SCREEN_WIDTH - 1); // Vị trí X ngẫu nhiên
+std::uniform_real_distribution<> dis(0.0, 1.0); 
+std::uniform_int_distribution<> dist_wave_increase(0, RANDOM_WAVES_UNTIL_INCREASE -1); 
+std::uniform_int_distribution<> dist_wave_delay(0, RANDOM_WAVE_DELAY -1); 
+std::uniform_int_distribution<> dist_side(0, 3); 
+std::uniform_int_distribution<> dist_y_spawn(0, SCREEN_HEIGHT - 1); 
+std::uniform_int_distribution<> dist_x_spawn(0, SCREEN_WIDTH - 1); 
 
-// --- Hàm trợ giúp load texture (ĐỊNH NGHĨA Ở ĐÂY) ---
 SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& path) {
     SDL_Texture* newTexture = nullptr;
     SDL_Surface* loadedSurface = IMG_Load(path.c_str());
@@ -38,51 +37,48 @@ SDL_Texture* loadTexture(SDL_Renderer* renderer, const std::string& path) {
 }
 
 
-// Constructor Game
-// --- Cập nhật Constructor để nhận và lưu sfxHealCollect ---
 Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m,
            Mix_Chunk* sfxShieldHitIn, Mix_Chunk* sfxPlayerHitIn,
            Mix_Chunk* sfxGameOverIn, Mix_Chunk* sfxWarningIn,
-           Mix_Chunk* sfxHealCollectIn, // Thêm tham số âm thanh heal
+           Mix_Chunk* sfxHealCollectIn, 
            Mix_Music* bgmGameIn,
            SDL_Texture* bgTexture)
     : renderer(r), enemy(e), menu(m),
-      // Textures
+
       mspaceshipTexture(nullptr), pauseButtonTexture(nullptr), scoreTexture(nullptr),
       highscoreTexture(nullptr), pausedTexture(nullptr), backToMenuTexture(nullptr),
       restartTexture(nullptr), gameOverTextTexture(nullptr), volumeLabelTexture(nullptr),
       giveUpTexture(nullptr), backgroundTexture(bgTexture),
-      // --- Textures mới ---
+
       allyShipTexture(nullptr), healItemTexture(nullptr),
-      // Sounds
+
       sfxShieldHit(sfxShieldHitIn), sfxPlayerHit(sfxPlayerHitIn),
       sfxGameOver(sfxGameOverIn), sfxWarning(sfxWarningIn),
-      // --- Âm thanh mới ---
-      sfxHealCollect(sfxHealCollectIn), // Lưu con trỏ âm thanh heal
+
+      sfxHealCollect(sfxHealCollectIn), 
       bgmGame(bgmGameIn),
-      // State
       gameOver(false), paused(false), showWarning(false),
       justStarted(false),
-      // Timing
+
       startTime(0), pauseStartTime(0), totalPausedTime(0), warningStartTime(0),
       nextSpawnTime(INITIAL_SPAWN_DELAY), lastMissileSpawnTime(0),
-      // --- Thời gian mới ---
-      lastAllySpawnTime(0), // Khởi tạo thời gian spawn ally
-      // Score, Wave
+
+      lastAllySpawnTime(0), 
+ 
       score(0), missileCount(INITIAL_MISSILE_COUNT), waveCount(0),
       spawnedMissilesInWave(0),
-      // Position, Angle
+
       warningX(0), warningY(0), arcStartAngle(INITIAL_SHIELD_START_ANGLE),
-      // Settings
+
       volume(DEFAULT_VOLUME), sensitivity(static_cast<int>(DEFAULT_SENSITIVITY)), isDraggingVolume(false),
-      // UI
+
       chitbox(PLAYER_CHITBOX), pauseButton(PAUSE_BUTTON_RECT),
       backToMenuButton(BACK_TO_MENU_BUTTON_RECT_GAMEOVER), restartButton(RESTART_BUTTON_RECT),
       giveUpButton(GIVE_UP_BUTTON_RECT), volumeSlider(VOLUME_SLIDER_RECT),
       volumeKnob(VOLUME_KNOB_RECT),
-      // Objects
+
       trajectory{TRAJECTORY_CENTER.x, TRAJECTORY_CENTER.y, TRAJECTORY_RADIUS}
-      // Các vector allies, healItems sẽ được khởi tạo rỗng mặc định
+
 {
     wavesUntilIncrease = BASE_WAVES_UNTIL_INCREASE + dist_wave_increase(gen);
 
@@ -92,35 +88,30 @@ Game::Game(SDL_Renderer* r, Enemy* e, MainMenu* m,
         lives.push_back(life);
     }
 
-    // Áp dụng cài đặt ban đầu từ menu
+
     setVolume(menu->volume);
     setSensitivity(menu->sensitivity);
 
-    // Nạp các texture ảnh cần thiết cho Game (sử dụng hàm loadTexture toàn cục)
+
     mspaceshipTexture = loadTexture(renderer, IMG_SPACESHIP);
     pauseButtonTexture = loadTexture(renderer, IMG_PAUSE_BUTTON);
-    // --- NẠP TEXTURES MỚI ---
+
     allyShipTexture = loadTexture(renderer, IMG_ALLY_SHIP);
     healItemTexture = loadTexture(renderer, IMG_HEAL_ITEM);
 
-    // Kiểm tra lỗi nạp texture cơ bản
-    if (!mspaceshipTexture) { std::cerr << "Error loading spaceship texture!" << std::endl; /* Xử lý lỗi */ }
-    if (!pauseButtonTexture) { std::cerr << "Error loading pause button texture!" << std::endl; /* Xử lý lỗi */ }
-    // Kiểm tra lỗi nạp texture mới
-    if (!allyShipTexture) { std::cerr << "Error loading ally ship texture!" << std::endl; /* Xử lý lỗi */ }
-    if (!healItemTexture) { std::cerr << "Error loading heal item texture!" << std::endl; /* Xử lý lỗi */ }
+
+    if (!mspaceshipTexture) { std::cerr << "Error loading spaceship texture!" << std::endl;}
+    if (!pauseButtonTexture) { std::cerr << "Error loading pause button texture!" << std::endl;}
+    if (!allyShipTexture) { std::cerr << "Error loading ally ship texture!" << std::endl;}
+    if (!healItemTexture) { std::cerr << "Error loading heal item texture!" << std::endl;}
 
 
-    // Khởi tạo các texture chữ
-    initTextures(); // Gọi hàm tạo texture chữ
-    // Cập nhật các texture động ban đầu
+    initTextures(); 
     updateScoreTexture();
     updateHighscoreTexture();
-    // Các texture chữ cố định như "Paused", "Volume" đã được tạo trong initTextures
 }
 
 Game::~Game() {
-    // Giải phóng textures đã tạo trong Game
     if (mspaceshipTexture) SDL_DestroyTexture(mspaceshipTexture);
     if (pauseButtonTexture) SDL_DestroyTexture(pauseButtonTexture);
     if (scoreTexture) SDL_DestroyTexture(scoreTexture);
@@ -131,40 +122,36 @@ Game::~Game() {
     if (gameOverTextTexture) SDL_DestroyTexture(gameOverTextTexture);
     if (volumeLabelTexture) SDL_DestroyTexture(volumeLabelTexture);
     if (giveUpTexture) SDL_DestroyTexture(giveUpTexture);
-    // --- GIẢI PHÓNG TEXTURES MỚI ---
     if (allyShipTexture) SDL_DestroyTexture(allyShipTexture);
     if (healItemTexture) SDL_DestroyTexture(healItemTexture);
-    // backgroundTexture và âm thanh được giải phóng ở main.cpp
 }
 
-// Khởi tạo các texture chữ cho màn hình Pause/Game Over
+
 void Game::initTextures() {
-    // Mở các cỡ font cần thiết
     TTF_Font* fontLarge = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_LARGE);
     TTF_Font* fontXLarge = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_XLARGE);
     TTF_Font* fontNormal = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_NORMAL);
 
-    // Kiểm tra lỗi mở font
+
     if (!fontLarge || !fontXLarge || !fontNormal) {
         std::cerr << "TTF_OpenFont failed in Game::initTextures: " << TTF_GetError() << std::endl;
         if(fontLarge) TTF_CloseFont(fontLarge);
         if(fontXLarge) TTF_CloseFont(fontXLarge);
         if(fontNormal) TTF_CloseFont(fontNormal);
-        // Đặt các texture về null để tránh lỗi khi render
+
         pausedTexture = nullptr;
         backToMenuTexture = nullptr;
         restartTexture = nullptr;
         gameOverTextTexture = nullptr;
         volumeLabelTexture = nullptr;
         giveUpTexture = nullptr;
-        scoreTexture = nullptr; // Cũng nên đặt về null nếu font lỗi
+        scoreTexture = nullptr;
         highscoreTexture = nullptr;
         return;
     }
     std::cout << "Fonts opened successfully in Game::initTextures." << std::endl;
 
 
-    // Hàm trợ giúp tạo texture (thêm kiểm tra lỗi)
     auto createTextureHelper = [&](const char* text, SDL_Texture*& texture, TTF_Font* fontToUse) {
         if (!fontToUse) {
              std::cerr << "Error: Attempting to create texture \"" << text << "\" with a null font." << std::endl;
@@ -173,20 +160,18 @@ void Game::initTextures() {
         SDL_Surface* textSurface = TTF_RenderText_Solid(fontToUse, text, TEXT_COLOR);
         if (!textSurface) {
             std::cerr << "TTF_RenderText_Solid failed for \"" << text << "\": " << TTF_GetError() << std::endl;
-            texture = nullptr; return false; // Đặt texture là null nếu lỗi
+            texture = nullptr; return false; 
         }
-        if (texture) SDL_DestroyTexture(texture); // Hủy texture cũ nếu có
+        if (texture) SDL_DestroyTexture(texture); 
         texture = SDL_CreateTextureFromSurface(renderer, textSurface);
         SDL_FreeSurface(textSurface);
         if (!texture) {
             std::cerr << "SDL_CreateTextureFromSurface failed for \"" << text << "\": " << SDL_GetError() << std::endl;
             return false;
         }
-        // std::cout << "Successfully created texture for: " << text << std::endl; // Bỏ comment để debug
         return true;
     };
 
-    // Tạo textures và kiểm tra lỗi
     if (!createTextureHelper("Back to Menu", backToMenuTexture, fontLarge)) { std::cerr << "Error creating back to menu texture." << std::endl; }
     if (!createTextureHelper("Restart", restartTexture, fontLarge)) { std::cerr << "Error creating restart texture." << std::endl; }
     if (!createTextureHelper("Give Up", giveUpTexture, fontLarge)) { std::cerr << "Error creating give up texture." << std::endl; }
@@ -194,33 +179,31 @@ void Game::initTextures() {
     if (!createTextureHelper("Game over", gameOverTextTexture, fontXLarge)) { std::cerr << "Error creating game over texture." << std::endl; }
     if (!createTextureHelper("Volume", volumeLabelTexture, fontNormal)) { std::cerr << "Error creating volume label texture." << std::endl; }
 
-    // Đóng fonts sau khi dùng xong
     TTF_CloseFont(fontLarge);
     TTF_CloseFont(fontXLarge);
     TTF_CloseFont(fontNormal);
 }
 
-// Cập nhật texture điểm số
+
 void Game::updateScoreTexture() {
-    // Sử dụng cỡ chữ nhỏ hơn đã định nghĩa trong config.h
-    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_SMALL); // <--- THAY ĐỔI CỠ FONT Ở ĐÂY
+    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_SMALL); 
     if (!font) {
         std::cerr << "Failed to open font for score (small): " << TTF_GetError() << std::endl;
-         if (scoreTexture) SDL_DestroyTexture(scoreTexture); // Reset texture nếu font lỗi
+         if (scoreTexture) SDL_DestroyTexture(scoreTexture);
          scoreTexture = nullptr;
         return;
     }
     std::stringstream ss;
     ss << "Score: " << score;
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, ss.str().c_str(), TEXT_COLOR);
-    TTF_CloseFont(font); // Đóng font ngay
+    TTF_CloseFont(font); 
     if (!textSurface) {
         std::cerr << "Failed to render score text (small): " << TTF_GetError() << std::endl;
         if (scoreTexture) SDL_DestroyTexture(scoreTexture);
         scoreTexture = nullptr;
         return;
     }
-    if (scoreTexture) SDL_DestroyTexture(scoreTexture); // Hủy texture cũ
+    if (scoreTexture) SDL_DestroyTexture(scoreTexture); 
     scoreTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
     if (!scoreTexture) {
@@ -228,10 +211,9 @@ void Game::updateScoreTexture() {
     }
 }
 
-// Cập nhật texture điểm cao
 void Game::updateHighscoreTexture() {
-    // Sử dụng cỡ chữ nhỏ hơn đã định nghĩa trong config.h
-    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_SMALL); // <--- THAY ĐỔI CỠ FONT Ở ĐÂY
+
+    TTF_Font* font = TTF_OpenFont(FONT_PATH.c_str(), FONT_SIZE_SMALL); 
      if (!font) {
          std::cerr << "Failed to open font for highscore (small): " << TTF_GetError() << std::endl;
          if (highscoreTexture) SDL_DestroyTexture(highscoreTexture);
@@ -239,18 +221,17 @@ void Game::updateHighscoreTexture() {
          return;
      }
     std::stringstream ss;
-    // Lấy điểm cao nhất từ MainMenu (đảm bảo menu đã load highscores)
     int highscore = (menu && !menu->highscores.empty()) ? menu->highscores[0] : 0;
     ss << "Highscore: " << highscore;
     SDL_Surface* textSurface = TTF_RenderText_Solid(font, ss.str().c_str(), TEXT_COLOR);
-    TTF_CloseFont(font); // Đóng font ngay
+    TTF_CloseFont(font); 
     if (!textSurface) {
         std::cerr << "Failed to render highscore text (small): " << TTF_GetError() << std::endl;
          if (highscoreTexture) SDL_DestroyTexture(highscoreTexture);
          highscoreTexture = nullptr;
         return;
     }
-    if (highscoreTexture) SDL_DestroyTexture(highscoreTexture); // Hủy texture cũ
+    if (highscoreTexture) SDL_DestroyTexture(highscoreTexture); 
     highscoreTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
     SDL_FreeSurface(textSurface);
      if (!highscoreTexture) {
@@ -258,94 +239,80 @@ void Game::updateHighscoreTexture() {
      }
 }
 
-// Các hàm update texture chữ cố định không cần thay đổi
-void Game::updatePausedTexture() { /* Không cần cập nhật vì text cố định */ }
-void Game::updateGameOverTextTexture() { /* Không cần cập nhật vì text cố định */ }
-void Game::updateVolumeLabelTexture() { /* Không cần cập nhật vì text cố định */ }
 
-// Xử lý input trong game
+void Game::updatePausedTexture() {}
+void Game::updateGameOverTextTexture() {}
+void Game::updateVolumeLabelTexture() {}
+
+
 void Game::handleInput(SDL_Event& event) {
     if (event.type == SDL_MOUSEBUTTONDOWN) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
         SDL_Point mousePoint = {mouseX, mouseY};
 
-        // Click nút Pause (chỉ hoạt động khi không Game Over)
         if (!gameOver && SDL_PointInRect(&mousePoint, &pauseButton)) {
              if (menu->sfxButtonClick) Mix_PlayChannel(CHANNEL_SFX, menu->sfxButtonClick, 0);
             if (!paused) { setGameStatePaused(); menu->gameState = MainMenu::PAUSED; }
             else { setGameStatePlaying(); menu->gameState = MainMenu::PLAYING; }
-            return; // Đã xử lý, không cần kiểm tra nút khác trong Pause/GameOver
+            return; 
         }
 
-        // Khi đang Pause
+
         if (paused) {
-            // Kiểm tra click vào núm volume (để bắt đầu kéo)
             if (SDL_PointInRect(&mousePoint, &volumeKnob)) {
                 isDraggingVolume = true;
-                // Không cần phát âm thanh click ở đây, vì chỉ là bắt đầu kéo
-                return; // Đã xử lý
+                return; 
             }
-            // Kiểm tra click vào nút Give Up
+
             if (SDL_PointInRect(&mousePoint, &giveUpButton)) {
                  if (menu->sfxButtonClick) Mix_PlayChannel(CHANNEL_SFX, menu->sfxButtonClick, 0);
-                triggerGameOver(); // Kết thúc game
-                menu->gameState = MainMenu::GAME_OVER; // Chuyển trạng thái menu
-                return; // Đã xử lý
+                triggerGameOver(); 
+                menu->gameState = MainMenu::GAME_OVER; 
+                return; 
             }
         }
 
-        // Khi Game Over
         if (gameOver) {
-            // Kiểm tra click vào nút Back to Menu
             if (SDL_PointInRect(&mousePoint, &backToMenuButton)) {
                  if (menu->sfxButtonClick) Mix_PlayChannel(CHANNEL_SFX, menu->sfxButtonClick, 0);
-                reset(); // Reset trạng thái game về ban đầu
-                menu->gameState = MainMenu::MENU; // Chuyển về menu chính
-                 Mix_HaltMusic(); // Dừng nhạc game
-                 if (menu->bgmMenu) Mix_PlayMusic(menu->bgmMenu, -1); // Bật lại nhạc menu
-                return; // Đã xử lý
+                reset(); 
+                menu->gameState = MainMenu::MENU; 
+                 Mix_HaltMusic();
+                 if (menu->bgmMenu) Mix_PlayMusic(menu->bgmMenu, -1); 
+                return; 
             }
-            // Kiểm tra click vào nút Restart
             if (SDL_PointInRect(&mousePoint, &restartButton)) {
                  if (menu->sfxButtonClick) Mix_PlayChannel(CHANNEL_SFX, menu->sfxButtonClick, 0);
-                reset(); // Reset game
-                startGame(); // Bắt đầu game mới
-                menu->gameState = MainMenu::PLAYING; // Chuyển trạng thái menu sang chơi
-                return; // Đã xử lý
+                reset();
+                startGame(); 
+                menu->gameState = MainMenu::PLAYING;
+                return; 
             }
         }
     }
-    // Thả chuột (kết thúc kéo volume)
     if (event.type == SDL_MOUSEBUTTONUP) {
         if (isDraggingVolume) {
             isDraggingVolume = false;
-            // Lưu cài đặt volume mới vào menu và file
             if (menu) {
                 menu->volume = volume;
                 menu->saveSettings();
             }
         }
      }
-    // Kéo chuột (thay đổi volume)
     if (event.type == SDL_MOUSEMOTION && isDraggingVolume) {
         int mouseX, mouseY;
         SDL_GetMouseState(&mouseX, &mouseY);
-        // Tính toán vị trí mới của núm dựa trên chuột X
         int newKnobX = mouseX - volumeKnob.w / 2;
-        // Giới hạn vị trí núm trong phạm vi thanh trượt
         int knobRange = volumeSlider.w - volumeKnob.w;
-        if (knobRange > 0) { // Thêm kiểm tra để tránh lỗi nếu slider quá nhỏ
+        if (knobRange > 0) {
             newKnobX = std::max(volumeSlider.x, std::min(newKnobX, volumeSlider.x + knobRange));
             volumeKnob.x = newKnobX;
-            // Tính toán giá trị volume mới (0-100)
             int newVolume = static_cast<int>(round(((float)(newKnobX - volumeSlider.x) / knobRange) * 100.0f));
-            // Đảm bảo volume trong khoảng 0-100
             newVolume = std::max(0, std::min(newVolume, 100));
-            setVolume(newVolume); // Áp dụng volume mới
+            setVolume(newVolume); 
         }
      }
-    // Phím ESC (Pause/Resume)
     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
         if (!gameOver) { // Chỉ hoạt động khi chưa game over
             if (!paused) {
