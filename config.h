@@ -71,7 +71,7 @@ constexpr float SHIELD_ROTATION_SPEED_FACTOR = 2.0f * PI;
 constexpr float DEFAULT_SENSITIVITY = 50.0f;
 constexpr float MIN_SENSITIVITY_MULTIPLIER = 0.75f;
 constexpr float MAX_SENSITIVITY_MULTIPLIER = 1.25f;
-const SDL_Color SHIELD_ARC_COLOR = {128, 0, 128, 255};
+const SDL_Color SHIELD_ARC_COLOR = {255, 255, 0, 255};
 const SDL_Color TRAJECTORY_CIRCLE_COLOR = {0, 0, 200, 255};
 
 constexpr float DEFAULT_MISSILE_SPEED = 100.0f;
